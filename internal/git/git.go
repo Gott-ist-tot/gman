@@ -327,3 +327,324 @@ func (g *Manager) getLastCommitTime(path string) (time.Time, error) {
 	
 	return time.Unix(timestamp, 0), nil
 }
+
+// GetCurrentBranch gets the current branch name for a repository
+func (g *Manager) GetCurrentBranch(path string) (string, error) {
+	return g.getCurrentBranch(path)
+}
+
+// GetBranches gets all branches for a repository
+func (g *Manager) GetBranches(path string, includeRemote bool) ([]string, error) {
+	var args []string
+	if includeRemote {
+		args = []string{"branch", "-a"}
+	} else {
+		args = []string{"branch"}
+	}
+	
+	output, err := g.RunCommand(path, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get branches: %w", err)
+	}
+	
+	var branches []string
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		
+		// Remove current branch indicator
+		if strings.HasPrefix(line, "* ") {
+			line = line[2:]
+		}
+		
+		// Skip remote HEAD references
+		if strings.Contains(line, "remotes/origin/HEAD") {
+			continue
+		}
+		
+		// Clean up remote branch names
+		if strings.HasPrefix(line, "remotes/origin/") {
+			line = strings.TrimPrefix(line, "remotes/origin/")
+		}
+		
+		branches = append(branches, line)
+	}
+	
+	// Remove duplicates
+	uniqueBranches := make(map[string]bool)
+	var result []string
+	for _, branch := range branches {
+		if !uniqueBranches[branch] {
+			uniqueBranches[branch] = true
+			result = append(result, branch)
+		}
+	}
+	
+	return result, nil
+}
+
+// CreateBranch creates a new branch in the repository
+func (g *Manager) CreateBranch(path, branchName string) error {
+	// Check if branch already exists
+	branches, err := g.GetBranches(path, false)
+	if err != nil {
+		return fmt.Errorf("failed to check existing branches: %w", err)
+	}
+	
+	for _, branch := range branches {
+		if branch == branchName {
+			return fmt.Errorf("branch '%s' already exists", branchName)
+		}
+	}
+	
+	// Create the branch
+	return g.runGitCommand(path, "checkout", "-b", branchName)
+}
+
+// SwitchBranch switches to the specified branch
+func (g *Manager) SwitchBranch(path, branchName string) error {
+	// Check if branch exists
+	branches, err := g.GetBranches(path, true)
+	if err != nil {
+		return fmt.Errorf("failed to check existing branches: %w", err)
+	}
+	
+	branchExists := false
+	for _, branch := range branches {
+		if branch == branchName {
+			branchExists = true
+			break
+		}
+	}
+	
+	if !branchExists {
+		return fmt.Errorf("branch '%s' does not exist", branchName)
+	}
+	
+	// Switch to the branch
+	return g.runGitCommand(path, "checkout", branchName)
+}
+
+// CleanMergedBranches removes local branches that have been merged
+func (g *Manager) CleanMergedBranches(path, mainBranch string) ([]string, error) {
+	// Auto-detect main branch if not specified
+	if mainBranch == "" {
+		var err error
+		mainBranch, err = g.detectMainBranch(path)
+		if err != nil {
+			return nil, fmt.Errorf("failed to detect main branch: %w", err)
+		}
+	}
+	
+	// Get current branch
+	currentBranch, err := g.getCurrentBranch(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current branch: %w", err)
+	}
+	
+	// Get merged branches
+	output, err := g.RunCommand(path, "branch", "--merged", mainBranch)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get merged branches: %w", err)
+	}
+	
+	var cleanedBranches []string
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		
+		// Remove current branch indicator
+		if strings.HasPrefix(line, "* ") {
+			line = line[2:]
+		}
+		
+		// Don't delete main branch or current branch
+		if line == mainBranch || line == currentBranch {
+			continue
+		}
+		
+		// Delete the branch
+		err := g.runGitCommand(path, "branch", "-d", line)
+		if err != nil {
+			// If force delete is needed, try with -D
+			err = g.runGitCommand(path, "branch", "-D", line)
+		}
+		
+		if err == nil {
+			cleanedBranches = append(cleanedBranches, line)
+		}
+	}
+	
+	return cleanedBranches, nil
+}
+
+// detectMainBranch tries to detect the main branch (main, master, develop)
+func (g *Manager) detectMainBranch(path string) (string, error) {
+	possibleMains := []string{"main", "master", "develop"}
+	
+	branches, err := g.GetBranches(path, true)
+	if err != nil {
+		return "", err
+	}
+	
+	for _, main := range possibleMains {
+		for _, branch := range branches {
+			if branch == main {
+				return main, nil
+			}
+		}
+	}
+	
+	// Default to current branch if no common main branch found
+	return g.getCurrentBranch(path)
+}
+
+// HasUncommittedChanges checks if repository has uncommitted changes
+func (g *Manager) HasUncommittedChanges(path string) (bool, error) {
+	output, err := g.RunCommand(path, "status", "--porcelain")
+	if err != nil {
+		return false, fmt.Errorf("failed to check uncommitted changes: %w", err)
+	}
+	return strings.TrimSpace(output) != "", nil
+}
+
+// HasUnpushedCommits checks if repository has unpushed commits
+func (g *Manager) HasUnpushedCommits(path string) (bool, error) {
+	// Get current branch
+	branch, err := g.getCurrentBranch(path)
+	if err != nil {
+		return false, fmt.Errorf("failed to get current branch: %w", err)
+	}
+	
+	// Check if remote tracking branch exists
+	remoteRef := fmt.Sprintf("origin/%s", branch)
+	_, err = g.RunCommand(path, "rev-parse", "--verify", remoteRef)
+	if err != nil {
+		// No remote tracking branch, consider as having unpushed commits
+		return true, nil
+	}
+	
+	// Check for commits ahead of remote
+	output, err := g.RunCommand(path, "rev-list", "--count", remoteRef+"..HEAD")
+	if err != nil {
+		return false, fmt.Errorf("failed to check unpushed commits: %w", err)
+	}
+	
+	ahead, _ := strconv.Atoi(strings.TrimSpace(output))
+	return ahead > 0, nil
+}
+
+// CommitChanges commits changes in the repository
+func (g *Manager) CommitChanges(path, message string, addAll bool) error {
+	if addAll {
+		// Add all changes
+		if err := g.runGitCommand(path, "add", "."); err != nil {
+			return fmt.Errorf("failed to add changes: %w", err)
+		}
+	}
+	
+	// Check if there are staged changes
+	output, err := g.RunCommand(path, "diff", "--cached", "--name-only")
+	if err != nil {
+		return fmt.Errorf("failed to check staged changes: %w", err)
+	}
+	
+	if strings.TrimSpace(output) == "" {
+		return fmt.Errorf("no staged changes to commit")
+	}
+	
+	// Commit changes
+	return g.runGitCommand(path, "commit", "-m", message)
+}
+
+// PushChanges pushes local commits to remote
+func (g *Manager) PushChanges(path string, force, setUpstream bool) error {
+	args := []string{"push"}
+	
+	if force {
+		args = append(args, "--force")
+	}
+	
+	if setUpstream {
+		// Get current branch for setting upstream
+		branch, err := g.getCurrentBranch(path)
+		if err != nil {
+			return fmt.Errorf("failed to get current branch: %w", err)
+		}
+		args = append(args, "--set-upstream", "origin", branch)
+	}
+	
+	return g.runGitCommand(path, args...)
+}
+
+// StashSave saves current changes to stash
+func (g *Manager) StashSave(path, message string) error {
+	// Check if there are any changes to stash
+	hasChanges, err := g.HasUncommittedChanges(path)
+	if err != nil {
+		return err
+	}
+	
+	if !hasChanges {
+		return fmt.Errorf("no changes to stash")
+	}
+	
+	args := []string{"stash", "save"}
+	if message != "" {
+		args = append(args, message)
+	}
+	
+	return g.runGitCommand(path, args...)
+}
+
+// StashPop applies and removes the latest stash
+func (g *Manager) StashPop(path string) error {
+	// Check if there are any stashes
+	stashes, err := g.StashList(path)
+	if err != nil {
+		return err
+	}
+	
+	if len(stashes) == 0 {
+		return fmt.Errorf("no stashes to pop")
+	}
+	
+	return g.runGitCommand(path, "stash", "pop")
+}
+
+// StashList returns list of stashes
+func (g *Manager) StashList(path string) ([]string, error) {
+	output, err := g.RunCommand(path, "stash", "list", "--oneline")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list stashes: %w", err)
+	}
+	
+	if strings.TrimSpace(output) == "" {
+		return []string{}, nil
+	}
+	
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	var stashes []string
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			// Remove the stash@{n}: prefix for cleaner display
+			parts := strings.SplitN(line, ": ", 2)
+			if len(parts) == 2 {
+				stashes = append(stashes, parts[1])
+			} else {
+				stashes = append(stashes, line)
+			}
+		}
+	}
+	
+	return stashes, nil
+}
+
+// StashClear removes all stashes
+func (g *Manager) StashClear(path string) error {
+	return g.runGitCommand(path, "stash", "clear")
+}

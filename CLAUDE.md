@@ -32,9 +32,10 @@ gman is a Git repository management CLI tool built in Go. It allows developers t
 
 **Command Structure (cmd/)**
 - Uses Cobra CLI framework for command handling
-- Each command is in its own file (add.go, list.go, status.go, recent.go, group.go, etc.)
+- Each command is in its own file (add.go, list.go, status.go, recent.go, group.go, branch.go, batch.go, etc.)
 - Root command in `cmd/root.go` handles global configuration and initialization
 - Enhanced commands: `recent` for recently accessed repositories, `group` for repository group management
+- Advanced Git workflow commands: `branch` for cross-repository branch management, batch operations (`commit`, `push`, `stash`)
 - Extended sync command with conditional options, dry-run mode, and progress display
 
 **Configuration Management (internal/config/)**
@@ -53,7 +54,9 @@ gman is a Git repository management CLI tool built in Go. It allows developers t
 - Supports concurrent operations across multiple repositories with semaphore-based concurrency control
 - Extended status information: file change counts, commit timestamps
 - Repository filtering for conditional sync operations
-- New methods: getFilesChangedCount(), getLastCommitTime()
+- Cross-repository branch management: GetBranches(), CreateBranch(), SwitchBranch(), CleanMergedBranches()
+- Batch Git operations: CommitChanges(), PushChanges(), StashSave(), StashPop(), StashList(), StashClear()
+- Utility methods: HasUncommittedChanges(), HasUnpushedCommits(), detectMainBranch()
 
 **Progress Tracking (internal/progress/)**
 - `progress.go` provides real-time progress tracking for concurrent operations
@@ -139,4 +142,55 @@ All Phase 1 and Phase 2 features have been successfully implemented:
 - **Progress Display**: Real-time progress tracking with `--progress` flag and MultiBar system
 - **Repository Grouping**: Complete group management system with create, list, delete, add, and remove operations
 
-These enhancements significantly improve batch operation efficiency and provide better control over multi-repository workflows.
+### Phase 3.1 - Git 工作流程深度整合 ✅
+- **Cross-Repository Branch Management**: Complete branch operations across all repositories
+  - `gman branch list [--verbose] [--remote]` - Display branch status across repositories
+  - `gman branch create <name>` - Create branches in multiple repositories
+  - `gman branch switch <name>` - Switch branches across repositories
+  - `gman branch clean [--main <branch>]` - Clean merged branches automatically
+- **Batch Git Operations**: Unified Git operations with group support and progress tracking
+  - `gman commit -m "message" [--add] [--group <name>]` - Cross-repository commits
+  - `gman push [--force] [--set-upstream] [--group <name>]` - Batch push operations
+  - `gman stash [save|pop|list|clear] [--group <name>]` - Cross-repository stash management
+- **Enhanced Group Integration**: All new commands support group filtering and dry-run modes
+
+These enhancements significantly improve batch operation efficiency and provide advanced Git workflow management across multiple repositories.
+
+## Future Roadmap - 未來功能規劃
+
+### 🔧 **智能倉庫管理** (未來考慮)
+- `gman discover <path>` - 自動發現並添加指定路徑下的 Git 倉庫
+- `gman clone <url> [alias]` - 克隆遠程倉庫並自動添加到配置
+- `gman import <config-file>` - 從其他工具或格式導入倉庫配置
+
+### 🔧 **搜索與分析功能** (未來考慮)
+- `gman search <pattern> [--type file|content]` - 跨倉庫內容和文件搜索
+- `gman find <filename>` - 跨倉庫文件快速查找
+- `gman analytics [--group <name>]` - 倉庫活動分析、提交統計、活躍度報告
+
+### 🔧 **倉庫健康與維護** (未來考慮)
+- `gman health [--detailed]` - 檢查倉庫狀態、大文件、潛在問題
+- `gman cleanup [--aggressive]` - 自動清理和優化倉庫 (git gc, 清理分支等)
+- `gman backup <destination>` - 批量備份倉庫到指定位置
+
+### 🔧 **環境管理系統** (未來考慮)
+- `gman env create <name>` - 創建環境配置 (dev/staging/prod)
+- `gman env switch <name>` - 切換到指定環境的倉庫集合
+- `gman env list` - 列出所有環境配置
+- `gman env sync <name>` - 同步特定環境的所有倉庫
+
+### 💡 **高級整合功能** (未來考慮)
+- GitHub/GitLab API 整合：顯示 Pull Request、Merge Request 狀態
+- CI/CD 管道狀態監控和顯示
+- Issue tracking 系統整合
+- 配置管理增強 (`export/import`)
+- 項目模板系統和插件架構
+
+### 📈 **項目狀態**
+
+gman 現已提供完整的多倉庫管理功能，包括：
+- **完整的倉庫狀態管理** (Phase 1)
+- **高級批量操作和群組管理** (Phase 2)  
+- **深度 Git 工作流程整合** (Phase 3.1)
+
+這些功能足以滿足大多數多倉庫開發場景的需求。未來功能將根據用戶反饋和實際需求進行規劃。
