@@ -5,8 +5,8 @@ import (
 	"sort"
 
 	"gman/internal/config"
+	"gman/internal/display"
 	"gman/internal/git"
-	"gman/pkg/types"
 	"github.com/spf13/cobra"
 )
 
@@ -52,114 +52,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	})
 
 	// Display results
-	displayStatus(statuses, cfg.Settings.ShowLastCommit)
+	displayer := display.NewStatusDisplayer(cfg.Settings.ShowLastCommit)
+	displayer.Display(statuses)
 	return nil
-}
-
-func displayStatus(statuses []types.RepoStatus, showLastCommit bool) {
-	if len(statuses) == 0 {
-		fmt.Println("No repositories to display.")
-		return
-	}
-
-	// Calculate column widths
-	maxAlias := len("Alias")
-	maxBranch := len("Branch")
-	maxWorkspace := len("Workspace")
-	maxSync := len("Sync Status")
-	maxCommit := len("Last Commit")
-
-	for _, status := range statuses {
-		if len(status.Alias) > maxAlias {
-			maxAlias = len(status.Alias)
-		}
-		if len(status.Branch) > maxBranch {
-			maxBranch = len(status.Branch)
-		}
-		if len(status.Workspace.String()) > maxWorkspace {
-			maxWorkspace = len(status.Workspace.String())
-		}
-		if len(status.SyncStatus.String()) > maxSync {
-			maxSync = len(status.SyncStatus.String())
-		}
-		if showLastCommit && len(status.LastCommit) > maxCommit {
-			maxCommit = len(status.LastCommit)
-		}
-	}
-
-	// Add some padding
-	maxAlias += 2
-	maxBranch += 2
-	maxWorkspace += 2
-	maxSync += 2
-	if showLastCommit {
-		maxCommit += 2
-	}
-
-	// Print header
-	fmt.Printf("%-*s %-*s %-*s %-*s", maxAlias, "Alias", maxBranch, "Branch", maxWorkspace, "Workspace", maxSync, "Sync Status")
-	if showLastCommit {
-		fmt.Printf(" %-*s", maxCommit, "Last Commit")
-	}
-	fmt.Println()
-
-	// Print separator
-	fmt.Printf("%s %s %s %s", 
-		repeatString("-", maxAlias), 
-		repeatString("-", maxBranch), 
-		repeatString("-", maxWorkspace), 
-		repeatString("-", maxSync))
-	if showLastCommit {
-		fmt.Printf(" %s", repeatString("-", maxCommit))
-	}
-	fmt.Println()
-
-	// Print repository status
-	for _, status := range statuses {
-		if status.Error != nil {
-			fmt.Printf("%-*s %-*s %-*s %-*s", 
-				maxAlias, formatAlias(status.Alias, status.IsCurrent),
-				maxBranch, "ERROR",
-				maxWorkspace, status.Error.Error(),
-				maxSync, "")
-			if showLastCommit {
-				fmt.Printf(" %-*s", maxCommit, "")
-			}
-			fmt.Println()
-			continue
-		}
-
-		fmt.Printf("%-*s %-*s %-*s %-*s", 
-			maxAlias, formatAlias(status.Alias, status.IsCurrent),
-			maxBranch, status.Branch,
-			maxWorkspace, status.Workspace.String(),
-			maxSync, status.SyncStatus.String())
-		
-		if showLastCommit {
-			fmt.Printf(" %-*s", maxCommit, truncateString(status.LastCommit, maxCommit-2))
-		}
-		fmt.Println()
-	}
-}
-
-func formatAlias(alias string, isCurrent bool) string {
-	if isCurrent {
-		return "* " + alias
-	}
-	return "  " + alias
-}
-
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen-3] + "..."
-}
-
-func repeatString(s string, count int) string {
-	result := ""
-	for i := 0; i < count; i++ {
-		result += s
-	}
-	return result
 }

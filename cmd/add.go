@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"gman/internal/config"
+	"gman/internal/display"
 	"github.com/spf13/cobra"
 )
 
@@ -86,7 +87,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 
 	// Get absolute path for display
 	absPath, _ := filepath.Abs(path)
-	fmt.Printf("Added repository: %s -> %s\n", alias, absPath)
+	display.PrintSuccess(fmt.Sprintf("Added repository: %s -> %s", alias, absPath))
 
 	return nil
 }

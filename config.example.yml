@@ -1,0 +1,32 @@
+# gman Configuration Example
+# Copy this file to ~/.config/gman/config.yml and customize as needed
+
+# Repository mappings
+# Key: alias (short name for the repository)
+# Value: absolute path to the repository
+repositories:
+  # Example repositories - replace with your own
+  backend-api: /home/user/projects/backend-service
+  frontend-app: /home/user/projects/frontend-react
+  infrastructure: /home/user/projects/terraform-infra
+  dotfiles: ~/.dotfiles
+  
+# Optional: Custom command aliases
+# These create shortcuts for commonly used command combinations
+command_aliases:
+  # Examples:
+  update: "sync --rebase --autostash"     # gman update = gman sync --rebase --autostash
+  cleanup: "run git gc --prune=now"       # gman cleanup = gman run "git gc --prune=now"
+  mainline: "run git checkout main && git pull"  # Switch all to main and pull
+
+# Application settings
+settings:
+  # Number of repositories to process in parallel (default: 5)
+  parallel_jobs: 5
+  
+  # Show last commit information in status output (default: true)
+  show_last_commit: true
+  
+  # Default sync mode when no flags are specified
+  # Options: "ff-only" (safest), "rebase", "autostash" (default: "ff-only")
+  default_sync_mode: "ff-only"

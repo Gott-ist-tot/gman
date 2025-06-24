@@ -2,9 +2,9 @@ package cmd
 
 import (
 	"fmt"
-	"sort"
 
 	"gman/internal/config"
+	"gman/internal/display"
 	"github.com/spf13/cobra"
 )
 
@@ -30,39 +30,6 @@ func runList(cmd *cobra.Command, args []string) error {
 	}
 
 	cfg := configMgr.GetConfig()
-	if len(cfg.Repositories) == 0 {
-		fmt.Println("No repositories configured. Use 'gman add' to add repositories.")
-		return nil
-	}
-
-	// Sort repositories by alias
-	type repoItem struct {
-		alias string
-		path  string
-	}
-
-	var repos []repoItem
-	for alias, path := range cfg.Repositories {
-		repos = append(repos, repoItem{alias: alias, path: path})
-	}
-
-	sort.Slice(repos, func(i, j int) bool {
-		return repos[i].alias < repos[j].alias
-	})
-
-	// Calculate maximum alias length for alignment
-	maxAliasLen := 0
-	for _, repo := range repos {
-		if len(repo.alias) > maxAliasLen {
-			maxAliasLen = len(repo.alias)
-		}
-	}
-
-	// Display repositories
-	fmt.Printf("Configured repositories (%d):\n\n", len(repos))
-	for _, repo := range repos {
-		fmt.Printf("  %-*s -> %s\n", maxAliasLen, repo.alias, repo.path)
-	}
-
+	display.PrintRepositoryList(cfg.Repositories)
 	return nil
 }

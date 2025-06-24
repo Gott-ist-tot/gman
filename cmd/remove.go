@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"gman/internal/config"
+	"gman/internal/display"
 	"github.com/spf13/cobra"
 )
 
@@ -62,6 +63,6 @@ func runRemove(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("Removed repository: %s (%s)\n", alias, path)
+	display.PrintSuccess(fmt.Sprintf("Removed repository: %s (%s)", alias, path))
 	return nil
 }
