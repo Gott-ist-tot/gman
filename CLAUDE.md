@@ -35,7 +35,7 @@ gman is a Git repository management CLI tool built in Go. It allows developers t
 - Each command is in its own file (add.go, list.go, status.go, recent.go, group.go, branch.go, batch.go, etc.)
 - Root command in `cmd/root.go` handles global configuration and initialization
 - Enhanced commands: `recent` for recently accessed repositories, `group` for repository group management
-- Advanced Git workflow commands: `branch` for cross-repository branch management, batch operations (`commit`, `push`, `stash`)
+- Advanced Git workflow commands: `branch` for cross-repository branch management, batch operations (`commit`, `push`, `stash`), `diff` for file comparison across branches and repositories, `worktree` for Git worktree management
 - Extended sync command with conditional options, dry-run mode, and progress display
 
 **Configuration Management (internal/config/)**
@@ -153,6 +153,15 @@ All Phase 1 and Phase 2 features have been successfully implemented:
   - `gman push [--force] [--set-upstream] [--group <name>]` - Batch push operations
   - `gman stash [save|pop|list|clear] [--group <name>]` - Cross-repository stash management
 - **Enhanced Group Integration**: All new commands support group filtering and dry-run modes
+- **File Comparison & Diff Operations**: Advanced file comparison capabilities across branches and repositories
+  - `gman diff file <repo> <branch1> <branch2> -- <file_path>` - Compare files between branches within a repository
+  - `gman diff cross-repo <repo1> <repo2> -- <file_path>` - Compare files between different repositories
+  - `--tool <external_tool>` support for visual diff tools (meld, vimdiff, etc.)
+- **Git Worktree Management**: Native Git worktree integration for parallel development
+  - `gman worktree add <repo> <path> --branch <branch>` - Create worktrees for parallel feature development
+  - `gman worktree list <repo>` - Display all worktrees with branch and status information
+  - `gman worktree remove <repo> <path> [--force]` - Clean removal of completed worktrees
+  - **Seamless Switch Integration**: Worktrees appear as first-class targets in `gman switch` interactive menu
 
 These enhancements significantly improve batch operation efficiency and provide advanced Git workflow management across multiple repositories.
 

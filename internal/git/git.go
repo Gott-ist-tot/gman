@@ -648,3 +648,181 @@ func (g *Manager) StashList(path string) ([]string, error) {
 func (g *Manager) StashClear(path string) error {
 	return g.runGitCommand(path, "stash", "clear")
 }
+
+// DiffFileBetweenBranches compares a specific file between two branches
+func (g *Manager) DiffFileBetweenBranches(repoPath, branch1, branch2, filePath string) (string, error) {
+	// Verify that both branches exist
+	if err := g.verifyBranchExists(repoPath, branch1); err != nil {
+		return "", fmt.Errorf("branch '%s' does not exist: %w", branch1, err)
+	}
+	if err := g.verifyBranchExists(repoPath, branch2); err != nil {
+		return "", fmt.Errorf("branch '%s' does not exist: %w", branch2, err)
+	}
+
+	// Run git diff command
+	diffRef := fmt.Sprintf("%s..%s", branch1, branch2)
+	output, err := g.RunCommand(repoPath, "diff", diffRef, "--", filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to run git diff: %w", err)
+	}
+
+	return output, nil
+}
+
+// DiffFileBetweenRepos compares the same file between two different repositories
+func (g *Manager) DiffFileBetweenRepos(repo1Path, repo2Path, filePath string) (string, error) {
+	// Get absolute paths to the files
+	file1Path := filepath.Join(repo1Path, filePath)
+	file2Path := filepath.Join(repo2Path, filePath)
+
+	// Check if files exist
+	if _, err := os.Stat(file1Path); os.IsNotExist(err) {
+		return "", fmt.Errorf("file '%s' does not exist in first repository", filePath)
+	}
+	if _, err := os.Stat(file2Path); os.IsNotExist(err) {
+		return "", fmt.Errorf("file '%s' does not exist in second repository", filePath)
+	}
+
+	// Use system diff command to compare files
+	cmd := exec.Command("diff", "-u", file1Path, file2Path)
+	output, err := cmd.CombinedOutput()
+	
+	// diff returns non-zero exit code when files differ, which is expected
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			// diff returns 1 when files differ, 2 for errors
+			if exitErr.ExitCode() == 1 {
+				return string(output), nil // Files differ, this is normal
+			}
+			return "", fmt.Errorf("diff command failed: %w", err)
+		}
+		return "", fmt.Errorf("failed to run diff command: %w", err)
+	}
+
+	return string(output), nil
+}
+
+// GetFileContentFromBranch retrieves the content of a file from a specific branch
+func (g *Manager) GetFileContentFromBranch(repoPath, branch, filePath string) (string, error) {
+	// Verify that the branch exists
+	if err := g.verifyBranchExists(repoPath, branch); err != nil {
+		return "", fmt.Errorf("branch '%s' does not exist: %w", branch, err)
+	}
+
+	// Get file content from the specified branch
+	fileRef := fmt.Sprintf("%s:%s", branch, filePath)
+	content, err := g.RunCommand(repoPath, "show", fileRef)
+	if err != nil {
+		return "", fmt.Errorf("failed to get file content from branch '%s': %w", branch, err)
+	}
+
+	return content, nil
+}
+
+// verifyBranchExists checks if a branch exists in the repository
+func (g *Manager) verifyBranchExists(repoPath, branch string) error {
+	_, err := g.RunCommand(repoPath, "rev-parse", "--verify", branch)
+	return err
+}
+
+// AddWorktree creates a new Git worktree for the specified branch
+func (g *Manager) AddWorktree(repoPath, worktreePath, branch string) error {
+	// Check if the worktree path already exists
+	if _, err := os.Stat(worktreePath); err == nil {
+		return fmt.Errorf("path '%s' already exists", worktreePath)
+	}
+
+	// Create the worktree
+	_, err := g.RunCommand(repoPath, "worktree", "add", worktreePath, branch)
+	if err != nil {
+		return fmt.Errorf("failed to create worktree: %w", err)
+	}
+
+	return nil
+}
+
+// ListWorktrees returns all worktrees for the specified repository
+func (g *Manager) ListWorktrees(repoPath string) ([]types.Worktree, error) {
+	// Get worktree list in porcelain format
+	output, err := g.RunCommand(repoPath, "worktree", "list", "--porcelain")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list worktrees: %w", err)
+	}
+
+	if output == "" {
+		return []types.Worktree{}, nil
+	}
+
+	return g.parseWorktreeList(output)
+}
+
+// RemoveWorktree removes a Git worktree
+func (g *Manager) RemoveWorktree(repoPath, worktreePath string, force bool) error {
+	args := []string{"worktree", "remove"}
+	if force {
+		args = append(args, "--force")
+	}
+	args = append(args, worktreePath)
+
+	_, err := g.RunCommand(repoPath, args...)
+	if err != nil {
+		return fmt.Errorf("failed to remove worktree: %w", err)
+	}
+
+	return nil
+}
+
+// parseWorktreeList parses the output of 'git worktree list --porcelain'
+func (g *Manager) parseWorktreeList(output string) ([]types.Worktree, error) {
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	var worktrees []types.Worktree
+	var current types.Worktree
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			// Empty line indicates end of worktree entry
+			if current.Path != "" {
+				worktrees = append(worktrees, current)
+				current = types.Worktree{}
+			}
+			continue
+		}
+
+		parts := strings.SplitN(line, " ", 2)
+		var key, value string
+		
+		if len(parts) == 1 {
+			// Single word lines (like "detached", "bare")
+			key = parts[0]
+			value = ""
+		} else {
+			key, value = parts[0], parts[1]
+		}
+
+		switch key {
+		case "worktree":
+			current.Path = value
+		case "HEAD":
+			current.Commit = value
+		case "branch":
+			// Branch format: "refs/heads/branch-name"
+			if strings.HasPrefix(value, "refs/heads/") {
+				current.Branch = strings.TrimPrefix(value, "refs/heads/")
+			} else {
+				current.Branch = value
+			}
+		case "bare":
+			current.IsBare = true
+		case "detached":
+			current.IsDetached = true
+		}
+	}
+
+	// Add the last worktree if there's no trailing empty line
+	if current.Path != "" {
+		worktrees = append(worktrees, current)
+	}
+
+	return worktrees, nil
+}

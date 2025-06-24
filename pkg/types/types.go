@@ -87,3 +87,22 @@ type Group struct {
 	Repositories []string `yaml:"repositories"`
 	CreatedAt    time.Time `yaml:"created_at"`
 }
+
+// Worktree represents a Git worktree
+type Worktree struct {
+	Path       string `json:"path"`
+	Branch     string `json:"branch"`
+	Commit     string `json:"commit"`
+	IsBare     bool   `json:"is_bare"`
+	IsDetached bool   `json:"is_detached"`
+}
+
+// SwitchTarget represents a target that can be switched to (repository or worktree)
+type SwitchTarget struct {
+	Alias       string `json:"alias"`        // Display name for the target
+	Path        string `json:"path"`         // Actual filesystem path
+	Type        string `json:"type"`         // "repository" or "worktree"
+	RepoAlias   string `json:"repo_alias"`   // Parent repository alias (for worktrees)
+	Branch      string `json:"branch,omitempty"` // Current branch (for worktrees)
+	Description string `json:"description,omitempty"` // Additional info
+}

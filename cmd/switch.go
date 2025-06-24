@@ -2,11 +2,14 @@ package cmd
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"gman/internal/config"
+	"gman/internal/git"
 	"gman/internal/interactive"
+	"gman/pkg/types"
 )
 
 // switchCmd represents the switch command
@@ -60,42 +63,47 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no repositories configured. Use 'gman add' to add repositories")
 	}
 
-	var alias string
-	var err error
+	// Collect all available switch targets (repositories + worktrees)
+	targets, err := collectSwitchTargets(cfg.Repositories)
+	if err != nil {
+		return fmt.Errorf("failed to collect switch targets: %w", err)
+	}
+
+	if len(targets) == 0 {
+		return fmt.Errorf("no repositories or worktrees available")
+	}
+
+	var selectedTarget *types.SwitchTarget
 
 	if len(args) == 0 {
 		// Interactive mode
-		selector := interactive.NewRepositorySelector(cfg.Repositories)
-		alias, err = selector.SelectRepository()
+		selector := interactive.NewSwitchTargetSelector(targets)
+		selectedTarget, err = selector.SelectTarget()
 		if err != nil {
 			return err
 		}
 	} else {
 		// Direct alias or fuzzy match
 		inputAlias := args[0]
-		
-		// Check for exact match first
-		if _, exists := cfg.Repositories[inputAlias]; exists {
-			alias = inputAlias
-		} else {
-			// Try fuzzy matching
-			alias, err = fuzzyMatchRepository(inputAlias, cfg.Repositories)
-			if err != nil {
-				return err
-			}
+		selectedTarget, err = findSwitchTarget(inputAlias, targets)
+		if err != nil {
+			return err
 		}
 	}
 
-	targetPath := cfg.Repositories[alias]
+	// Track recent usage (use repository alias for main repos, or parent repo for worktrees)
+	trackingAlias := selectedTarget.Alias
+	if selectedTarget.Type == "worktree" && selectedTarget.RepoAlias != "" {
+		trackingAlias = selectedTarget.RepoAlias
+	}
 	
-	// Track recent usage
-	if err := configMgr.TrackRecentUsage(alias); err != nil {
+	if err := configMgr.TrackRecentUsage(trackingAlias); err != nil {
 		// Don't fail the switch if tracking fails, just log it silently
 		// Could add debug logging here in the future
 	}
 
 	// Output special format for shell wrapper to handle
-	fmt.Printf("GMAN_CD:%s", targetPath)
+	fmt.Printf("GMAN_CD:%s", selectedTarget.Path)
 	return nil
 }
 
@@ -120,4 +128,105 @@ func fuzzyMatchRepository(input string, repos map[string]string) (string, error)
 
 	return "", fmt.Errorf("multiple repositories match '%s': %s. Please be more specific", 
 		input, strings.Join(matches, ", "))
+}
+
+// collectSwitchTargets gathers all available switch targets (repositories + worktrees)
+func collectSwitchTargets(repositories map[string]string) ([]types.SwitchTarget, error) {
+	var targets []types.SwitchTarget
+	gitMgr := git.NewManager()
+
+	// Add all repositories as targets
+	for alias, path := range repositories {
+		targets = append(targets, types.SwitchTarget{
+			Alias:     alias,
+			Path:      path,
+			Type:      "repository",
+			RepoAlias: alias,
+		})
+
+		// Add worktrees for this repository
+		worktrees, err := gitMgr.ListWorktrees(path)
+		if err != nil {
+			// Don't fail if we can't list worktrees for a repo, just skip them
+			continue
+		}
+
+		for _, wt := range worktrees {
+			// Skip the main worktree (it's already included as the repository)
+			if wt.Path == path {
+				continue
+			}
+
+			// Create a unique alias for the worktree
+			wtAlias := filepath.Base(wt.Path)
+			if wtAlias == "." || wtAlias == "" {
+				wtAlias = fmt.Sprintf("%s-worktree", alias)
+			}
+
+			// Ensure worktree alias is unique
+			originalAlias := wtAlias
+			counter := 1
+			for isAliasUsed(wtAlias, targets) {
+				wtAlias = fmt.Sprintf("%s-%d", originalAlias, counter)
+				counter++
+			}
+
+			targets = append(targets, types.SwitchTarget{
+				Alias:       wtAlias,
+				Path:        wt.Path,
+				Type:        "worktree",
+				RepoAlias:   alias,
+				Branch:      wt.Branch,
+				Description: fmt.Sprintf("Worktree of %s", alias),
+			})
+		}
+	}
+
+	return targets, nil
+}
+
+// findSwitchTarget finds a switch target by alias or fuzzy matching
+func findSwitchTarget(input string, targets []types.SwitchTarget) (*types.SwitchTarget, error) {
+	input = strings.ToLower(input)
+
+	// Try exact match first
+	for _, target := range targets {
+		if strings.ToLower(target.Alias) == input {
+			return &target, nil
+		}
+	}
+
+	// Try fuzzy matching
+	var matches []types.SwitchTarget
+	for _, target := range targets {
+		if strings.Contains(strings.ToLower(target.Alias), input) {
+			matches = append(matches, target)
+		}
+	}
+
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("no targets found matching '%s'", input)
+	}
+
+	if len(matches) == 1 {
+		return &matches[0], nil
+	}
+
+	// Multiple matches
+	var aliases []string
+	for _, match := range matches {
+		aliases = append(aliases, match.Alias)
+	}
+	return nil, fmt.Errorf("multiple targets match '%s': %s. Please be more specific", 
+		input, strings.Join(aliases, ", "))
+}
+
+// isAliasUsed checks if an alias is already used in the targets list
+func isAliasUsed(alias string, targets []types.SwitchTarget) bool {
+	for _, target := range targets {
+		if target.Alias == alias {
+			return true
+		}
+	}
+	return false
 }

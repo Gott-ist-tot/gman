@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
+	"gman/pkg/types"
 )
 
 // RepositorySelector provides interactive repository selection
@@ -107,6 +108,143 @@ func (rs *RepositorySelector) fuzzyMatch(input string, aliases []string) []strin
 	for _, alias := range aliases {
 		if strings.Contains(strings.ToLower(alias), input) {
 			matches = append(matches, alias)
+		}
+	}
+
+	return matches
+}
+
+// SwitchTargetSelector provides interactive selection for repositories and worktrees
+type SwitchTargetSelector struct {
+	targets []types.SwitchTarget
+}
+
+// NewSwitchTargetSelector creates a new switch target selector
+func NewSwitchTargetSelector(targets []types.SwitchTarget) *SwitchTargetSelector {
+	return &SwitchTargetSelector{targets: targets}
+}
+
+// SelectTarget displays an interactive menu and returns the selected target
+func (sts *SwitchTargetSelector) SelectTarget() (*types.SwitchTarget, error) {
+	if len(sts.targets) == 0 {
+		return nil, fmt.Errorf("no repositories or worktrees available")
+	}
+
+	// Sort targets: repositories first, then worktrees, alphabetically within each group
+	sortedTargets := make([]types.SwitchTarget, len(sts.targets))
+	copy(sortedTargets, sts.targets)
+	
+	// Simple sort: repositories first, then by alias
+	for i := 0; i < len(sortedTargets)-1; i++ {
+		for j := i + 1; j < len(sortedTargets); j++ {
+			shouldSwap := false
+			
+			// Repositories before worktrees
+			if sortedTargets[i].Type == "worktree" && sortedTargets[j].Type == "repository" {
+				shouldSwap = true
+			} else if sortedTargets[i].Type == sortedTargets[j].Type {
+				// Same type, sort alphabetically by alias
+				if sortedTargets[i].Alias > sortedTargets[j].Alias {
+					shouldSwap = true
+				}
+			}
+			
+			if shouldSwap {
+				sortedTargets[i], sortedTargets[j] = sortedTargets[j], sortedTargets[i]
+			}
+		}
+	}
+
+	// Display the menu
+	fmt.Printf("\n%s\n", color.CyanString("Select a target:"))
+	fmt.Println(strings.Repeat("─", 60))
+
+	for i, target := range sortedTargets {
+		var icon, typeLabel string
+		displayPath := target.Path
+		
+		// Customize display based on type
+		if target.Type == "repository" {
+			icon = "📁"
+			typeLabel = color.BlueString("repo")
+		} else {
+			icon = "🌿"
+			typeLabel = color.MagentaString("worktree")
+			// For worktrees, show branch info
+			if target.Branch != "" {
+				typeLabel += color.WhiteString(" (%s)", target.Branch)
+			}
+		}
+		
+		// Truncate path if too long
+		if len(displayPath) > 40 {
+			displayPath = "..." + displayPath[len(displayPath)-37:]
+		}
+		
+		fmt.Printf("%s %s %s %-20s %s %s\n", 
+			color.YellowString("[%d]", i+1),
+			icon,
+			typeLabel,
+			color.GreenString(target.Alias),
+			color.WhiteString("→"),
+			color.WhiteString(displayPath))
+	}
+
+	fmt.Println(strings.Repeat("─", 60))
+	fmt.Print("Enter number or alias (Ctrl+C to cancel): ")
+
+	// Read user input
+	reader := bufio.NewReader(os.Stdin)
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return nil, fmt.Errorf("failed to read input: %w", err)
+	}
+
+	selection := strings.TrimSpace(input)
+	if selection == "" {
+		return nil, fmt.Errorf("no selection made")
+	}
+
+	// Try to parse as number first
+	if num, err := strconv.Atoi(selection); err == nil {
+		if num >= 1 && num <= len(sortedTargets) {
+			return &sortedTargets[num-1], nil
+		}
+		return nil, fmt.Errorf("invalid selection number: %d", num)
+	}
+
+	// Try as exact alias match
+	for _, target := range sortedTargets {
+		if target.Alias == selection {
+			return &target, nil
+		}
+	}
+
+	// Try fuzzy matching
+	matches := sts.fuzzyMatch(selection, sortedTargets)
+	if len(matches) == 1 {
+		fmt.Printf("Matched: %s\n", color.GreenString(matches[0].Alias))
+		return &matches[0], nil
+	} else if len(matches) > 1 {
+		var aliases []string
+		for _, match := range matches {
+			aliases = append(aliases, match.Alias)
+		}
+		fmt.Printf("Multiple matches found: %s\n", strings.Join(aliases, ", "))
+		return nil, fmt.Errorf("ambiguous selection, please be more specific")
+	}
+
+	return nil, fmt.Errorf("target '%s' not found", selection)
+}
+
+// fuzzyMatch performs simple fuzzy matching on switch targets
+func (sts *SwitchTargetSelector) fuzzyMatch(input string, targets []types.SwitchTarget) []types.SwitchTarget {
+	input = strings.ToLower(input)
+	var matches []types.SwitchTarget
+
+	for _, target := range targets {
+		if strings.Contains(strings.ToLower(target.Alias), input) {
+			matches = append(matches, target)
 		}
 	}
 
