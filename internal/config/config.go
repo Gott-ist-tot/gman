@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
-	"gman/pkg/types"
 	"github.com/spf13/viper"
+	"gman/pkg/types"
 	"gopkg.in/yaml.v3"
 )
 
@@ -23,22 +24,32 @@ func NewManager() *Manager {
 
 // Load loads the configuration from file
 func (m *Manager) Load() error {
-	// Set default values
-	m.setDefaults()
+	configPath := m.getConfigPath()
+	
+	// Check if config file exists
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		// Config file not found, create default config
+		return m.createDefaultConfig()
+	}
 
-	// Try to read config file
-	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			// Config file not found, create default config
-			return m.createDefaultConfig()
-		}
+	// Read config file directly
+	data, err := os.ReadFile(configPath)
+	if err != nil {
 		return fmt.Errorf("error reading config file: %w", err)
 	}
 
-	// Unmarshal config
+	// Unmarshal YAML directly
 	config := &types.Config{}
-	if err := viper.Unmarshal(config); err != nil {
+	if err := yaml.Unmarshal(data, config); err != nil {
 		return fmt.Errorf("error unmarshaling config: %w", err)
+	}
+
+	// Set defaults if not present
+	if config.Settings.ParallelJobs == 0 {
+		config.Settings.ParallelJobs = 5
+	}
+	if config.Settings.DefaultSyncMode == "" {
+		config.Settings.DefaultSyncMode = "ff-only"
 	}
 
 	m.config = config
@@ -165,4 +176,175 @@ func isGitRepository(path string) bool {
 		return false
 	}
 	return info.IsDir()
+}
+
+// TrackRecentUsage adds or updates a repository in the recent usage list
+func (m *Manager) TrackRecentUsage(alias string) error {
+	if m.config.RecentUsage == nil {
+		m.config.RecentUsage = []types.RecentEntry{}
+	}
+
+	// Remove existing entry if present
+	for i, entry := range m.config.RecentUsage {
+		if entry.Alias == alias {
+			m.config.RecentUsage = append(m.config.RecentUsage[:i], m.config.RecentUsage[i+1:]...)
+			break
+		}
+	}
+
+	// Add to the beginning of the list
+	newEntry := types.RecentEntry{
+		Alias:      alias,
+		AccessTime: time.Now(),
+	}
+	m.config.RecentUsage = append([]types.RecentEntry{newEntry}, m.config.RecentUsage...)
+
+	// Keep only the last 10 entries
+	if len(m.config.RecentUsage) > 10 {
+		m.config.RecentUsage = m.config.RecentUsage[:10]
+	}
+
+	return m.Save()
+}
+
+// GetRecentUsage returns the recent usage list
+func (m *Manager) GetRecentUsage() []types.RecentEntry {
+	if m.config.RecentUsage == nil {
+		return []types.RecentEntry{}
+	}
+	return m.config.RecentUsage
+}
+
+// CreateGroup creates a new repository group
+func (m *Manager) CreateGroup(name, description string, repositories []string) error {
+	if m.config.Groups == nil {
+		m.config.Groups = make(map[string]types.Group)
+	}
+
+	// Check if group already exists
+	if _, exists := m.config.Groups[name]; exists {
+		return fmt.Errorf("group '%s' already exists", name)
+	}
+
+	// Validate repositories exist
+	for _, repo := range repositories {
+		if _, exists := m.config.Repositories[repo]; !exists {
+			return fmt.Errorf("repository '%s' not found", repo)
+		}
+	}
+
+	// Create group
+	group := types.Group{
+		Name:         name,
+		Description:  description,
+		Repositories: repositories,
+		CreatedAt:    time.Now(),
+	}
+
+	m.config.Groups[name] = group
+	return m.Save()
+}
+
+// DeleteGroup removes a group
+func (m *Manager) DeleteGroup(name string) error {
+	if m.config.Groups == nil {
+		return fmt.Errorf("no groups configured")
+	}
+
+	if _, exists := m.config.Groups[name]; !exists {
+		return fmt.Errorf("group '%s' not found", name)
+	}
+
+	delete(m.config.Groups, name)
+	return m.Save()
+}
+
+// GetGroups returns all configured groups
+func (m *Manager) GetGroups() map[string]types.Group {
+	if m.config.Groups == nil {
+		return make(map[string]types.Group)
+	}
+	return m.config.Groups
+}
+
+// GetGroupRepositories returns repositories for a specific group
+func (m *Manager) GetGroupRepositories(groupName string) (map[string]string, error) {
+	if m.config.Groups == nil {
+		return nil, fmt.Errorf("no groups configured")
+	}
+
+	group, exists := m.config.Groups[groupName]
+	if !exists {
+		return nil, fmt.Errorf("group '%s' not found", groupName)
+	}
+
+	result := make(map[string]string)
+	for _, alias := range group.Repositories {
+		if path, exists := m.config.Repositories[alias]; exists {
+			result[alias] = path
+		}
+	}
+
+	return result, nil
+}
+
+// AddToGroup adds repositories to an existing group
+func (m *Manager) AddToGroup(groupName string, repositories []string) error {
+	if m.config.Groups == nil {
+		return fmt.Errorf("no groups configured")
+	}
+
+	group, exists := m.config.Groups[groupName]
+	if !exists {
+		return fmt.Errorf("group '%s' not found", groupName)
+	}
+
+	// Validate repositories exist
+	for _, repo := range repositories {
+		if _, exists := m.config.Repositories[repo]; !exists {
+			return fmt.Errorf("repository '%s' not found", repo)
+		}
+	}
+
+	// Add repositories (avoiding duplicates)
+	for _, repo := range repositories {
+		found := false
+		for _, existing := range group.Repositories {
+			if existing == repo {
+				found = true
+				break
+			}
+		}
+		if !found {
+			group.Repositories = append(group.Repositories, repo)
+		}
+	}
+
+	m.config.Groups[groupName] = group
+	return m.Save()
+}
+
+// RemoveFromGroup removes repositories from a group
+func (m *Manager) RemoveFromGroup(groupName string, repositories []string) error {
+	if m.config.Groups == nil {
+		return fmt.Errorf("no groups configured")
+	}
+
+	group, exists := m.config.Groups[groupName]
+	if !exists {
+		return fmt.Errorf("group '%s' not found", groupName)
+	}
+
+	// Remove repositories
+	for _, repo := range repositories {
+		for i, existing := range group.Repositories {
+			if existing == repo {
+				group.Repositories = append(group.Repositories[:i], group.Repositories[i+1:]...)
+				break
+			}
+		}
+	}
+
+	m.config.Groups[groupName] = group
+	return m.Save()
 }

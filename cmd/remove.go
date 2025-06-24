@@ -3,9 +3,9 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/spf13/cobra"
 	"gman/internal/config"
 	"gman/internal/display"
-	"github.com/spf13/cobra"
 )
 
 // removeCmd represents the remove command

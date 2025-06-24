@@ -3,20 +3,31 @@ package display
 import (
 	"fmt"
 	"strings"
+	"time"
 
-	"gman/pkg/types"
 	"github.com/fatih/color"
+	"gman/pkg/types"
 )
 
 // StatusDisplayer handles displaying repository status in a nice format
 type StatusDisplayer struct {
 	showLastCommit bool
+	showExtended   bool // Show additional info like files changed and commit time
 }
 
 // NewStatusDisplayer creates a new status displayer
 func NewStatusDisplayer(showLastCommit bool) *StatusDisplayer {
 	return &StatusDisplayer{
 		showLastCommit: showLastCommit,
+		showExtended:   false,
+	}
+}
+
+// NewExtendedStatusDisplayer creates a new status displayer with extended info
+func NewExtendedStatusDisplayer(showLastCommit bool) *StatusDisplayer {
+	return &StatusDisplayer{
+		showLastCommit: showLastCommit,
+		showExtended:   true,
 	}
 }
 
@@ -33,6 +44,8 @@ func (d *StatusDisplayer) Display(statuses []types.RepoStatus) {
 	maxWorkspace := len("Workspace")
 	maxSync := len("Sync Status")
 	maxCommit := len("Last Commit")
+	maxFiles := len("Files")
+	maxTime := len("Last Commit")
 
 	for _, status := range statuses {
 		if len(status.Alias) > maxAlias {
@@ -52,6 +65,16 @@ func (d *StatusDisplayer) Display(statuses []types.RepoStatus) {
 		if d.showLastCommit && len(status.LastCommit) > maxCommit {
 			maxCommit = len(status.LastCommit)
 		}
+		if d.showExtended {
+			filesStr := fmt.Sprintf("%d", status.FilesChanged)
+			if len(filesStr) > maxFiles {
+				maxFiles = len(filesStr)
+			}
+			timeStr := formatCommitTime(status.CommitTime)
+			if len(timeStr) > maxTime {
+				maxTime = len(timeStr)
+			}
+		}
 	}
 
 	// Add padding
@@ -62,25 +85,33 @@ func (d *StatusDisplayer) Display(statuses []types.RepoStatus) {
 	if d.showLastCommit {
 		maxCommit += 2
 	}
+	if d.showExtended {
+		maxFiles += 2
+		maxTime += 2
+	}
 
 	// Print header with colors
-	fmt.Printf("%-*s %-*s %-*s %-*s", 
-		maxAlias, color.CyanString("Alias"), 
-		maxBranch, color.CyanString("Branch"), 
-		maxWorkspace, color.CyanString("Workspace"), 
+	fmt.Printf("%-*s %-*s %-*s %-*s",
+		maxAlias, color.CyanString("Alias"),
+		maxBranch, color.CyanString("Branch"),
+		maxWorkspace, color.CyanString("Workspace"),
 		maxSync, color.CyanString("Sync Status"))
-	if d.showLastCommit {
+	if d.showExtended {
+		fmt.Printf(" %-*s %-*s", maxFiles, color.CyanString("Files"), maxTime, color.CyanString("Last Commit"))
+	} else if d.showLastCommit {
 		fmt.Printf(" %-*s", maxCommit, color.CyanString("Last Commit"))
 	}
 	fmt.Println()
 
 	// Print separator
-	fmt.Printf("%s %s %s %s", 
-		strings.Repeat("─", maxAlias), 
-		strings.Repeat("─", maxBranch), 
-		strings.Repeat("─", maxWorkspace), 
+	fmt.Printf("%s %s %s %s",
+		strings.Repeat("─", maxAlias),
+		strings.Repeat("─", maxBranch),
+		strings.Repeat("─", maxWorkspace),
 		strings.Repeat("─", maxSync))
-	if d.showLastCommit {
+	if d.showExtended {
+		fmt.Printf(" %s %s", strings.Repeat("─", maxFiles), strings.Repeat("─", maxTime))
+	} else if d.showLastCommit {
 		fmt.Printf(" %s", strings.Repeat("─", maxCommit))
 	}
 	fmt.Println()
@@ -88,25 +119,36 @@ func (d *StatusDisplayer) Display(statuses []types.RepoStatus) {
 	// Print repository status
 	for _, status := range statuses {
 		if status.Error != nil {
-			fmt.Printf("%-*s %-*s %-*s %-*s", 
+			fmt.Printf("%-*s %-*s %-*s %-*s",
 				maxAlias, d.formatAlias(status.Alias, status.IsCurrent),
 				maxBranch, color.RedString("ERROR"),
 				maxWorkspace, color.RedString(truncateString(status.Error.Error(), maxWorkspace-2)),
 				maxSync, "")
-			if d.showLastCommit {
+			if d.showExtended {
+				fmt.Printf(" %-*s %-*s", maxFiles, "", maxTime, "")
+			} else if d.showLastCommit {
 				fmt.Printf(" %-*s", maxCommit, "")
 			}
 			fmt.Println()
 			continue
 		}
 
-		fmt.Printf("%-*s %-*s %-*s %-*s", 
+		fmt.Printf("%-*s %-*s %-*s %-*s",
 			maxAlias, d.formatAlias(status.Alias, status.IsCurrent),
 			maxBranch, d.formatBranch(status.Branch),
 			maxWorkspace, status.Workspace.String(),
 			maxSync, status.SyncStatus.String())
-		
-		if d.showLastCommit {
+
+		if d.showExtended {
+			filesDisplay := ""
+			if status.FilesChanged > 0 {
+				filesDisplay = color.YellowString("%d", status.FilesChanged)
+			} else {
+				filesDisplay = color.GreenString("0")
+			}
+			timeDisplay := formatCommitTime(status.CommitTime)
+			fmt.Printf(" %-*s %-*s", maxFiles, filesDisplay, maxTime, timeDisplay)
+		} else if d.showLastCommit {
 			fmt.Printf(" %-*s", maxCommit, d.formatCommit(status.LastCommit))
 		}
 		fmt.Println()
@@ -213,4 +255,33 @@ func stripAnsiCodes(s string) string {
 		}
 	}
 	return result
+}
+
+// formatCommitTime formats commit time in a human-readable way
+func formatCommitTime(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	
+	now := time.Now()
+	diff := now.Sub(t)
+	
+	if diff < time.Hour {
+		minutes := int(diff.Minutes())
+		if minutes < 1 {
+			return "now"
+		}
+		return fmt.Sprintf("%dm", minutes)
+	} else if diff < 24*time.Hour {
+		hours := int(diff.Hours())
+		return fmt.Sprintf("%dh", hours)
+	} else if diff < 7*24*time.Hour {
+		days := int(diff.Hours() / 24)
+		return fmt.Sprintf("%dd", days)
+	} else if diff < 30*24*time.Hour {
+		weeks := int(diff.Hours() / (24 * 7))
+		return fmt.Sprintf("%dw", weeks)
+	} else {
+		return t.Format("Jan 2")
+	}
 }

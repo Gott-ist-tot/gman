@@ -1,12 +1,17 @@
 package types
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 // Config represents the gman configuration
 type Config struct {
 	Repositories   map[string]string `yaml:"repositories"`
 	CommandAliases map[string]string `yaml:"command_aliases,omitempty"`
 	Settings       Settings          `yaml:"settings,omitempty"`
+	RecentUsage    []RecentEntry     `yaml:"recent_usage,omitempty"`
+	Groups         map[string]Group  `yaml:"groups,omitempty"`
 }
 
 // Settings contains user preferences
@@ -57,12 +62,28 @@ func (s SyncStatus) String() string {
 
 // RepoStatus represents the status of a single repository
 type RepoStatus struct {
-	Alias      string
-	Path       string
-	Branch     string
-	IsCurrent  bool
-	Workspace  WorkspaceStatus
-	SyncStatus SyncStatus
-	LastCommit string
-	Error      error
+	Alias         string
+	Path          string
+	Branch        string
+	IsCurrent     bool
+	Workspace     WorkspaceStatus
+	SyncStatus    SyncStatus
+	LastCommit    string
+	FilesChanged  int           // Number of changed files
+	CommitTime    time.Time     // Time of last commit
+	Error         error
+}
+
+// RecentEntry represents a recently used repository
+type RecentEntry struct {
+	Alias     string    `yaml:"alias"`
+	AccessTime time.Time `yaml:"access_time"`
+}
+
+// Group represents a collection of repositories
+type Group struct {
+	Name         string   `yaml:"name"`
+	Description  string   `yaml:"description,omitempty"`
+	Repositories []string `yaml:"repositories"`
+	CreatedAt    time.Time `yaml:"created_at"`
 }

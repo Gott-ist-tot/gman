@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/spf13/cobra"
 	"gman/internal/config"
 	"gman/internal/display"
 	"gman/internal/git"
-	"github.com/spf13/cobra"
 )
+
+var extendedStatus bool
 
 // statusCmd represents the status command
 var statusCmd = &cobra.Command{
@@ -18,12 +20,15 @@ var statusCmd = &cobra.Command{
 - Current branch
 - Workspace status (clean/dirty/stashed)
 - Sync status with remote (ahead/behind/up-to-date)
-- Last commit information`,
+- Last commit information
+
+Use --extended to see additional information like file change counts and commit times.`,
 	RunE: runStatus,
 }
 
 func init() {
 	rootCmd.AddCommand(statusCmd)
+	statusCmd.Flags().BoolVarP(&extendedStatus, "extended", "e", false, "Show extended information (file changes, commit times)")
 }
 
 func runStatus(cmd *cobra.Command, args []string) error {
@@ -52,7 +57,12 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	})
 
 	// Display results
-	displayer := display.NewStatusDisplayer(cfg.Settings.ShowLastCommit)
+	var displayer *display.StatusDisplayer
+	if extendedStatus {
+		displayer = display.NewExtendedStatusDisplayer(cfg.Settings.ShowLastCommit)
+	} else {
+		displayer = display.NewStatusDisplayer(cfg.Settings.ShowLastCommit)
+	}
 	displayer.Display(statuses)
 	return nil
 }

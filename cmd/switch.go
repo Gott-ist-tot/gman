@@ -2,19 +2,27 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
-	"gman/internal/config"
 	"github.com/spf13/cobra"
+	"gman/internal/config"
+	"gman/internal/interactive"
 )
 
 // switchCmd represents the switch command
 var switchCmd = &cobra.Command{
-	Use:   "switch <alias>",
+	Use:   "switch [alias]",
 	Short: "Switch to a repository directory",
 	Long: `Switch to the directory of the specified repository.
+If no alias is provided, an interactive menu will be displayed.
 This command outputs a special format that the shell wrapper function
-can use to change the current working directory.`,
-	Args: cobra.ExactArgs(1),
+can use to change the current working directory.
+
+Examples:
+  gman switch my-repo       # Switch to 'my-repo'
+  gman switch proj          # Fuzzy match repositories containing 'proj'
+  gman switch               # Interactive selection menu`,
+	Args: cobra.RangeArgs(0, 1),
 	RunE: runSwitch,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
@@ -41,8 +49,6 @@ func init() {
 }
 
 func runSwitch(cmd *cobra.Command, args []string) error {
-	alias := args[0]
-
 	// Load configuration
 	configMgr := config.NewManager()
 	if err := configMgr.Load(); err != nil {
@@ -50,12 +56,68 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 	}
 
 	cfg := configMgr.GetConfig()
-	targetPath, exists := cfg.Repositories[alias]
-	if !exists {
-		return fmt.Errorf("repository '%s' not found", alias)
+	if len(cfg.Repositories) == 0 {
+		return fmt.Errorf("no repositories configured. Use 'gman add' to add repositories")
+	}
+
+	var alias string
+	var err error
+
+	if len(args) == 0 {
+		// Interactive mode
+		selector := interactive.NewRepositorySelector(cfg.Repositories)
+		alias, err = selector.SelectRepository()
+		if err != nil {
+			return err
+		}
+	} else {
+		// Direct alias or fuzzy match
+		inputAlias := args[0]
+		
+		// Check for exact match first
+		if _, exists := cfg.Repositories[inputAlias]; exists {
+			alias = inputAlias
+		} else {
+			// Try fuzzy matching
+			alias, err = fuzzyMatchRepository(inputAlias, cfg.Repositories)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	targetPath := cfg.Repositories[alias]
+	
+	// Track recent usage
+	if err := configMgr.TrackRecentUsage(alias); err != nil {
+		// Don't fail the switch if tracking fails, just log it silently
+		// Could add debug logging here in the future
 	}
 
 	// Output special format for shell wrapper to handle
 	fmt.Printf("GMAN_CD:%s", targetPath)
 	return nil
+}
+
+// fuzzyMatchRepository performs fuzzy matching on repository aliases
+func fuzzyMatchRepository(input string, repos map[string]string) (string, error) {
+	input = strings.ToLower(input)
+	var matches []string
+
+	for alias := range repos {
+		if strings.Contains(strings.ToLower(alias), input) {
+			matches = append(matches, alias)
+		}
+	}
+
+	if len(matches) == 0 {
+		return "", fmt.Errorf("no repositories found matching '%s'", input)
+	}
+
+	if len(matches) == 1 {
+		return matches[0], nil
+	}
+
+	return "", fmt.Errorf("multiple repositories match '%s': %s. Please be more specific", 
+		input, strings.Join(matches, ", "))
 }

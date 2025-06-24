@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"gman/pkg/types"
 )
@@ -72,6 +73,22 @@ func (g *Manager) GetRepoStatus(alias, path string) types.RepoStatus {
 		return status
 	}
 	status.LastCommit = lastCommit
+
+	// Get files changed count
+	filesChanged, err := g.getFilesChangedCount(path)
+	if err != nil {
+		// Don't fail for this, just set to 0
+		filesChanged = 0
+	}
+	status.FilesChanged = filesChanged
+
+	// Get commit time
+	commitTime, err := g.getLastCommitTime(path)
+	if err != nil {
+		// Don't fail for this, use zero time
+		commitTime = time.Time{}
+	}
+	status.CommitTime = commitTime
 
 	return status
 }
@@ -167,12 +184,12 @@ func (g *Manager) isCurrentRepository(path string) bool {
 	if err != nil {
 		return false
 	}
-	
+
 	currentAbs, err := filepath.Abs(g.currentDir)
 	if err != nil {
 		return false
 	}
-	
+
 	return absPath == currentAbs
 }
 
@@ -275,4 +292,38 @@ func (g *Manager) runGitCommand(path string, args ...string) error {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = path
 	return cmd.Run()
+}
+
+// getFilesChangedCount gets the number of changed files in the workspace
+func (g *Manager) getFilesChangedCount(path string) (int, error) {
+	output, err := g.RunCommand(path, "status", "--porcelain")
+	if err != nil {
+		return 0, fmt.Errorf("failed to get files changed count: %w", err)
+	}
+	
+	if output == "" {
+		return 0, nil
+	}
+	
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	return len(lines), nil
+}
+
+// getLastCommitTime gets the timestamp of the last commit
+func (g *Manager) getLastCommitTime(path string) (time.Time, error) {
+	output, err := g.RunCommand(path, "log", "-1", "--pretty=format:%ct")
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to get last commit time: %w", err)
+	}
+	
+	if output == "" {
+		return time.Time{}, nil
+	}
+	
+	timestamp, err := strconv.ParseInt(output, 10, 64)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to parse commit timestamp: %w", err)
+	}
+	
+	return time.Unix(timestamp, 0), nil
 }
