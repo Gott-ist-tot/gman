@@ -56,7 +56,7 @@ var (
 
 	PanelFocusedStyle = PanelStyle.Copy().
 				BorderForeground(ColorBorderFocused).
-				BorderStyle(lipgloss.ThickBorder())
+				BorderStyle(lipgloss.DoubleBorder())
 
 	PanelTitleStyle = lipgloss.NewStyle().
 			Foreground(ColorTextPrimary).
@@ -303,16 +303,28 @@ func CreatePanel(content string, title string, width, height int, focused bool) 
 	style := PanelStyle
 	titleStyle := PanelTitleStyle
 	
+	// Add focus indicator to title
+	focusIndicator := ""
 	if focused {
 		style = PanelFocusedStyle
 		titleStyle = PanelTitleFocusedStyle
+		focusIndicator = "◆ "
+	} else {
+		focusIndicator = "  "
 	}
 	
-	// Create title bar
-	titleBar := titleStyle.Width(width - 2).Render(title)
+	// Create title bar with focus indicator
+	titleText := focusIndicator + title
+	titleBar := titleStyle.Width(width - 2).Render(titleText)
 	
 	// Create content area
 	contentHeight := height - 3 // Account for title and borders
+	
+	// Add padding to content if empty or very short
+	if len(content) < 20 {
+		content = content + "\n\n" // Add some breathing room
+	}
+	
 	contentArea := style.
 		Width(width).
 		Height(contentHeight).

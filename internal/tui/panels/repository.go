@@ -44,7 +44,22 @@ func NewRepositoryPanel(state *models.AppState) *RepositoryPanel {
 
 // Init initializes the repository panel
 func (r *RepositoryPanel) Init() tea.Cmd {
-	return r.loadRepositoryStatus()
+	var cmds []tea.Cmd
+	
+	// Load repository status
+	cmds = append(cmds, r.loadRepositoryStatus())
+	
+	// If a repository is auto-selected, trigger selection message
+	if r.state.SelectedRepo != "" && len(r.repos) > 0 {
+		for _, repo := range r.repos {
+			if repo.Alias == r.state.SelectedRepo {
+				cmds = append(cmds, models.RepositorySelectedCmd(repo.Alias, repo.Path))
+				break
+			}
+		}
+	}
+	
+	return tea.Batch(cmds...)
 }
 
 // Update handles messages for the repository panel
@@ -267,6 +282,17 @@ func (r *RepositoryPanel) updateRepositoryStatus(alias string, status *types.Rep
 func (r *RepositoryPanel) refreshRepositoryList() {
 	r.repos = r.repos[:0] // Clear slice but keep capacity
 	
+	// Ensure repositories are loaded from config
+	if r.state.Repositories == nil || len(r.state.Repositories) == 0 {
+		// Try to reload from config manager
+		if r.state.ConfigManager != nil {
+			config := r.state.ConfigManager.GetConfig()
+			if config != nil && config.Repositories != nil {
+				r.state.Repositories = config.Repositories
+			}
+		}
+	}
+	
 	// Get repositories from state
 	for alias, path := range r.state.Repositories {
 		// Apply group filter
@@ -313,6 +339,15 @@ func (r *RepositoryPanel) refreshRepositoryList() {
 	// Adjust cursor if needed
 	if r.cursor >= len(r.repos) {
 		r.cursor = max(0, len(r.repos)-1)
+	}
+	
+	// Auto-select first repository if none is selected and repositories exist
+	if r.state.SelectedRepo == "" && len(r.repos) > 0 {
+		r.state.SelectedRepo = r.repos[0].Alias
+		r.repos[0].IsSelected = true
+		
+		// Track recent usage for auto-selected repository
+		r.state.ConfigManager.TrackRecentUsage(r.repos[0].Alias)
 	}
 }
 
@@ -362,53 +397,61 @@ func (r *RepositoryPanel) getStatusPriority(repo models.RepoDisplayItem) int {
 // renderRepositoryItem renders a single repository item
 func (r *RepositoryPanel) renderRepositoryItem(repo models.RepoDisplayItem, selected bool) string {
 	var style lipgloss.Style
+	cursor := ""
+	
 	if selected {
 		style = styles.ListItemSelectedStyle
+		cursor = "▶ "
 	} else {
 		style = styles.ListItemStyle
+		cursor = "  "
 	}
 	
-	// Status indicator
-	statusIcon := "❓"
+	// Status indicator with better icons
+	statusIcon := "⚪"
 	statusColor := styles.ColorTextMuted
 	
 	if repo.Status != nil {
 		switch repo.Status.Workspace {
 		case types.Clean:
-			statusIcon = "✅"
+			statusIcon = "🟢"
 			statusColor = styles.ColorStatusClean
 		case types.Dirty:
-			statusIcon = "📝"
+			statusIcon = "🔴"
 			statusColor = styles.ColorStatusDirty
 		}
 		
-		// Add sync status
-		if repo.Status.SyncStatus.Ahead > 0 {
-			statusIcon += "↑"
-		}
-		if repo.Status.SyncStatus.Behind > 0 {
-			statusIcon += "↓"
-		}
+		// Add sync status with better indicators
 		if repo.Status.SyncStatus.Ahead > 0 && repo.Status.SyncStatus.Behind > 0 {
-			statusIcon = "📝↕" // Replace with diverged icon
+			statusIcon = "🔀" // Diverged
+		} else if repo.Status.SyncStatus.Ahead > 0 {
+			statusIcon = "⬆️ " // Ahead
+		} else if repo.Status.SyncStatus.Behind > 0 {
+			statusIcon = "⬇️ " // Behind
 		}
 	}
 	
-	// Repository name
-	nameStyle := lipgloss.NewStyle().Foreground(styles.ColorTextPrimary).Bold(selected)
+	// Repository name with better styling
+	nameStyle := lipgloss.NewStyle().
+		Foreground(styles.ColorTextPrimary).
+		Bold(selected)
+	if selected {
+		nameStyle = nameStyle.Foreground(styles.ColorPrimary)
+	}
 	name := nameStyle.Render(repo.Alias)
 	
 	// Status with color
 	statusStyle := lipgloss.NewStyle().Foreground(statusColor)
 	status := statusStyle.Render(statusIcon)
 	
-	// Build the line
-	line := fmt.Sprintf("%s %s", status, name)
+	// Build the line with better spacing
+	line := fmt.Sprintf("%s%s %s", cursor, status, name)
 	
-	// Add additional info if there's space
+	// Add additional info with better formatting
 	if repo.Status != nil && repo.Status.FilesChanged > 0 {
 		filesInfo := lipgloss.NewStyle().
 			Foreground(styles.ColorTextSecondary).
+			Italic(true).
 			Render(fmt.Sprintf(" (%d files)", repo.Status.FilesChanged))
 		line += filesInfo
 	}
@@ -418,31 +461,72 @@ func (r *RepositoryPanel) renderRepositoryItem(repo models.RepoDisplayItem, sele
 
 // renderEmptyState renders the empty state when no repositories are found
 func (r *RepositoryPanel) renderEmptyState() string {
-	return styles.MutedStyle.Render("No repositories found.\nAdd repositories with 'gman add'.")
+	// Check if repositories exist in config but are filtered out
+	totalRepos := len(r.state.Repositories)
+	if totalRepos > 0 {
+		// Repositories exist but are filtered
+		filterInfo := ""
+		if r.state.RepositoryListState.FilterText != "" {
+			filterInfo += fmt.Sprintf("Filter: '%s'\n", r.state.RepositoryListState.FilterText)
+		}
+		if r.state.RepositoryListState.FilterGroup != "" {
+			filterInfo += fmt.Sprintf("Group: '%s'\n", r.state.RepositoryListState.FilterGroup)
+		}
+		return styles.MutedStyle.Render(fmt.Sprintf("No repositories match current filters.\n%s\nPress 'g' to clear group filter or '/' to change text filter.\n\nTotal repositories: %d", filterInfo, totalRepos))
+	}
+	
+	// No repositories configured at all
+	return styles.MutedStyle.Render("No repositories configured.\n\nAdd repositories with:\n  gman add <alias> <path>\n\nOr quit (q) and run 'gman list' to see available commands.")
 }
 
 // renderFooter renders the footer with repository count and sort info
 func (r *RepositoryPanel) renderFooter() string {
-	count := fmt.Sprintf("%d repos", len(r.repos))
-	sortInfo := fmt.Sprintf("Sort: %s", r.state.RepositoryListState.SortBy.String())
+	// Repository count with status breakdown
+	count := fmt.Sprintf("📁 %d repos", len(r.repos))
+	if len(r.repos) != len(r.state.Repositories) {
+		count = fmt.Sprintf("📁 %d/%d repos", len(r.repos), len(r.state.Repositories))
+	}
 	
-	footer := lipgloss.JoinHorizontal(
-		lipgloss.Left,
+	// Sort information with icon
+	sortInfo := fmt.Sprintf("📊 %s", r.state.RepositoryListState.SortBy.String())
+	
+	// Selected repository indicator
+	selectedInfo := ""
+	if r.state.SelectedRepo != "" {
+		selectedInfo = fmt.Sprintf("👆 %s", r.state.SelectedRepo)
+	}
+	
+	// Build footer components
+	components := []string{
 		styles.MutedStyle.Render(count),
 		styles.MutedStyle.Render(" • "),
 		styles.MutedStyle.Render(sortInfo),
-	)
+	}
+	
+	if selectedInfo != "" {
+		components = append(components, 
+			styles.MutedStyle.Render(" • "),
+			styles.MutedStyle.Render(selectedInfo),
+		)
+	}
 	
 	if r.state.RepositoryListState.FilterGroup != "" {
-		footer = lipgloss.JoinHorizontal(
-			lipgloss.Left,
-			footer,
-			styles.MutedStyle.Render(" • Group: "),
+		components = append(components,
+			styles.MutedStyle.Render(" • 🏷️  "),
 			styles.MutedStyle.Render(r.state.RepositoryListState.FilterGroup),
 		)
 	}
 	
-	return footer
+	footer := lipgloss.JoinHorizontal(lipgloss.Left, components...)
+	
+	// Add keyboard shortcuts hint
+	shortcuts := styles.MutedStyle.Render("↑↓ Navigate • Enter Select • / Filter • s Sort")
+	
+	return lipgloss.JoinVertical(
+		lipgloss.Left,
+		footer,
+		shortcuts,
+	)
 }
 
 // Helper functions

@@ -88,14 +88,33 @@ func (s *StatusPanel) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 
 // renderNoSelection renders the view when no repository is selected
 func (s *StatusPanel) renderNoSelection() string {
-	content := styles.MutedStyle.Render("Select a repository to view its status")
+	help := "Select a repository to view its status\n\n"
+	help += "Navigation:\n"
+	help += "• Arrow keys: Navigate repository list\n"
+	help += "• Enter: Select repository\n"
+	help += "• r: Refresh status\n"
+	help += "• e: Toggle extended view\n"
+	help += "• b: Toggle branch information\n"
+	content := styles.MutedStyle.Render(help)
 	return content
 }
 
 // renderLoading renders the loading state
 func (s *StatusPanel) renderLoading() string {
-	content := styles.MutedStyle.Render("Loading repository status...")
-	return content
+	repoName := s.state.SelectedRepo
+	if repoName == "" {
+		repoName = "repository"
+	}
+	
+	content := fmt.Sprintf("Loading status for: %s\n\n", repoName)
+	content += "Fetching:\n"
+	content += "• Working directory status\n"
+	content += "• Branch information\n"
+	content += "• Remote sync status\n"
+	content += "• Recent commits\n\n"
+	content += "Please wait..."
+	
+	return styles.MutedStyle.Render(content)
 }
 
 // renderStatus renders the detailed status for a repository

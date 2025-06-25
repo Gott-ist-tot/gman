@@ -1,6 +1,7 @@
 package panels
 
 import (
+	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -53,11 +54,24 @@ func (s *SearchPanel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (s *SearchPanel) View() string {
 	var content strings.Builder
 
-	// Search mode indicator
+	// Search mode indicator with visual enhancement
+	modeIcon := "📁"
+	if s.state.SearchState.Mode == models.SearchCommits {
+		modeIcon = "📝"
+	}
+	
 	modeStyle := styles.SubHeaderStyle
-	mode := modeStyle.Render(s.state.SearchState.Mode.String() + " search")
+	mode := modeStyle.Render(fmt.Sprintf("%s %s search", modeIcon, s.state.SearchState.Mode.String()))
 	content.WriteString(mode)
 	content.WriteString("\n\n")
+
+	// Search status indicator
+	if s.state.SearchState.IsActive {
+		activeStyle := styles.ListItemSelectedStyle
+		status := activeStyle.Render("🔍 Search active - select result to preview")
+		content.WriteString(status)
+		content.WriteString("\n\n")
+	}
 
 	// Search input/query
 	if s.state.SearchState.Query != "" {
@@ -70,6 +84,8 @@ func (s *SearchPanel) View() string {
 	// Results or instructions
 	if len(s.state.SearchState.Results) > 0 {
 		content.WriteString(s.renderResults())
+	} else if s.state.SearchState.IsActive {
+		content.WriteString(s.renderSearching())
 	} else {
 		content.WriteString(s.renderInstructions())
 	}
@@ -99,17 +115,26 @@ func (s *SearchPanel) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return s.launchFzf()
 
 	case "enter":
-		// Launch search with current mode
-		return s.launchFzf()
+		// If we have search results, update preview; otherwise launch search
+		if len(s.state.SearchState.Results) > 0 && s.state.SearchState.SelectedItem < len(s.state.SearchState.Results) {
+			return s.updatePreview()
+		} else {
+			// Launch search with current mode
+			return s.launchFzf()
+		}
 
 	case "up", "k":
-		if s.state.SearchState.SelectedItem > 0 {
+		if len(s.state.SearchState.Results) > 0 && s.state.SearchState.SelectedItem > 0 {
 			s.state.SearchState.SelectedItem--
+			// Update preview with newly selected item
+			return s.updatePreview()
 		}
 
 	case "down", "j":
-		if s.state.SearchState.SelectedItem < len(s.state.SearchState.Results)-1 {
+		if len(s.state.SearchState.Results) > 0 && s.state.SearchState.SelectedItem < len(s.state.SearchState.Results)-1 {
 			s.state.SearchState.SelectedItem++
+			// Update preview with newly selected item
+			return s.updatePreview()
 		}
 	}
 
@@ -118,12 +143,14 @@ func (s *SearchPanel) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 
 // launchFzf launches fzf for searching
 func (s *SearchPanel) launchFzf() tea.Cmd {
-	// This would launch the fzf integration from Phase 5.1
-	// For now, return a placeholder command
+	// Set search as active and launch fzf
+	s.state.SearchState.IsActive = true
+	s.state.SearchState.Query = "" // Will be filled by fzf
+	
 	return func() tea.Msg {
 		return models.FzfLaunchMsg{
 			Mode:  s.state.SearchState.Mode,
-			Query: "",
+			Query: s.state.SearchState.Query,
 		}
 	}
 }
@@ -149,18 +176,38 @@ func (s *SearchPanel) renderResults() string {
 	return content.String()
 }
 
+// renderSearching renders the searching state
+func (s *SearchPanel) renderSearching() string {
+	content := "🔍 Launching fzf search...\n\n"
+	content += fmt.Sprintf("Mode: %s\n", s.state.SearchState.Mode.String())
+	content += "Searching across all repositories\n\n"
+	content += "Note: fzf will open in a separate window.\n"
+	content += "Select your item and results will appear here."
+	
+	return styles.MutedStyle.Render(content)
+}
+
 // renderInstructions renders search instructions
 func (s *SearchPanel) renderInstructions() string {
 	instructions := []string{
 		"Search Instructions:",
 		"",
 		"/ or Enter - Search files",
-		"c - Search commits",
+		"c - Search commits", 
 		"Tab - Toggle search mode",
 		"",
-		"Integration with fzf from Phase 5.1",
-		"provides powerful fuzzy search",
-		"across all repositories.",
+		"📁 File Search:",
+		"  • Find files across all repositories",
+		"  • Fuzzy matching on file names and paths",
+		"  • Real-time preview in panel 4",
+		"",
+		"📝 Commit Search:",
+		"  • Search commit messages and authors", 
+		"  • Browse commit history across repos",
+		"  • View commit diffs in preview",
+		"",
+		"Integration with fzf provides powerful",
+		"fuzzy search across all repositories.",
 	}
 
 	var content strings.Builder
@@ -169,6 +216,9 @@ func (s *SearchPanel) renderInstructions() string {
 			content.WriteString("\n")
 		} else if strings.HasSuffix(line, ":") {
 			content.WriteString(styles.SubHeaderStyle.Render(line))
+			content.WriteString("\n")
+		} else if strings.HasPrefix(line, "  ") {
+			content.WriteString(styles.MutedStyle.Render(line))
 			content.WriteString("\n")
 		} else {
 			content.WriteString(styles.BodyStyle.Render(line))

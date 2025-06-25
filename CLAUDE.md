@@ -206,8 +206,11 @@ These enhancements significantly improve batch operation efficiency and provide 
 - **鍵盤導航系統**: 完整的快捷鍵支持和 Vim 風格導航
 - **主題系統**: 支援 Dark/Light 主題切換
 - **無縫整合**: 與 Phase 5.1 搜索功能和所有現有 CLI 命令完美整合
+- **智能終端檢測**: 增強的終端相容性檢測和診斷系統
   - `gman dashboard` - 啟動 TUI 儀表板
   - `gman dash/tui/ui` - 命令別名支持
+  - `gman dashboard --debug` - 顯示終端診斷資訊
+  - `gman dashboard --force` - 強制啟動 TUI 模式
 
 ## Future Roadmap - 未來功能規劃
 

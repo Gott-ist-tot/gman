@@ -2,11 +2,16 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"gman/internal/config"
+	"gman/internal/fzf"
+	"gman/internal/index"
 	"gman/internal/tui/models"
 	"gman/internal/tui/panels"
 	"gman/internal/tui/styles"
@@ -98,6 +103,20 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Handle errors (could show in status bar or notification)
 		// For now, just log them
 		fmt.Printf("Error: %v\n", msg.Error)
+
+	case models.FzfLaunchMsg:
+		// Handle fzf search launch
+		return a, a.launchFzfSearch(msg.Mode, msg.Query)
+
+	case models.SearchResultsMsg:
+		// Handle search results returned from fzf
+		a.state.SearchState.Results = msg.Results
+		a.state.SearchState.Query = msg.Query
+		if len(msg.Results) > 0 {
+			a.state.SearchState.SelectedItem = 0
+			// Update preview with first result
+			cmds = append(cmds, a.updatePreviewFromSearch(msg.Results[0]))
+		}
 	}
 
 	// Update panels
@@ -352,6 +371,194 @@ func isInputMessage(msg tea.Msg) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+// launchFzfSearch launches an external fzf search process
+func (a *App) launchFzfSearch(mode models.SearchMode, query string) tea.Cmd {
+	return func() tea.Msg {
+		// Create searcher to get data
+		searcher, err := index.NewSearcher(a.state.ConfigManager)
+		if err != nil {
+			return models.ErrorMsg{Error: fmt.Errorf("failed to create searcher: %w", err)}
+		}
+		defer searcher.Close()
+
+		// Get search results
+		repos := a.state.Repositories
+		var searchResults []index.SearchResult
+		
+		switch mode {
+		case models.SearchFiles:
+			searchResults, err = searcher.SearchFiles("", "", repos)
+		case models.SearchCommits:
+			searchResults, err = searcher.SearchCommits("", "", repos)
+		}
+		
+		if err != nil {
+			return models.ErrorMsg{Error: fmt.Errorf("search failed: %w", err)}
+		}
+
+		// Convert to TUI search results
+		results := make([]models.SearchResultItem, len(searchResults))
+		for i, result := range searchResults {
+			results[i] = models.SearchResultItem{
+				Type:        result.Type,
+				Repository:  result.RepoAlias,
+				Path:        result.Path,
+				Hash:        result.Hash,
+				DisplayText: result.DisplayText,
+				PreviewData: result.Data,
+			}
+		}
+		
+		return models.SearchResultsMsg{
+			Mode:    mode,
+			Query:   query,
+			Results: results,
+			Error:   nil,
+		}
+	}
+}
+
+// buildFzfCommand constructs the fzf command for the given search mode
+func (a *App) buildFzfCommand(mode models.SearchMode, query string) *exec.Cmd {
+	// Check if fzf is available
+	if !fzf.IsAvailable() {
+		return exec.Command("echo", "fzf not available")
+	}
+
+	// Create searcher to get data
+	searcher, err := index.NewSearcher(a.state.ConfigManager)
+	if err != nil {
+		return exec.Command("echo", fmt.Sprintf("Error creating searcher: %v", err))
+	}
+	defer searcher.Close()
+	
+	var cmd *exec.Cmd
+	
+	switch mode {
+	case models.SearchFiles:
+		// Get all files from indexed repositories
+		repos := a.state.Repositories
+		results, err := searcher.SearchFiles("", "", repos) // Empty query to get all files
+		if err != nil {
+			cmd = exec.Command("echo", fmt.Sprintf("Error: %v", err))
+		} else {
+			// Create input for fzf
+			input := strings.Join(searcher.FormatFileSearchResults(results), "\n")
+			
+			// Build fzf command with file-specific options
+			opts := fzf.DefaultFileOptions()
+			opts.Prompt = "Files> "
+			opts.Header = "Search files across repositories"
+			opts.InitialQuery = query
+			
+			cmd = exec.Command("fzf", a.buildFzfArgs(opts)...)
+			cmd.Stdin = strings.NewReader(input)
+		}
+		
+	case models.SearchCommits:
+		// Get all commits from indexed repositories
+		repos := a.state.Repositories
+		results, err := searcher.SearchCommits("", "", repos) // Empty query to get all commits
+		if err != nil {
+			cmd = exec.Command("echo", fmt.Sprintf("Error: %v", err))
+		} else {
+			// Create input for fzf
+			input := strings.Join(searcher.FormatCommitSearchResults(results), "\n")
+			
+			// Build fzf command with commit-specific options
+			opts := fzf.DefaultCommitOptions()
+			opts.Prompt = "Commits> "
+			opts.Header = "Search commits across repositories"
+			opts.InitialQuery = query
+			
+			cmd = exec.Command("fzf", a.buildFzfArgs(opts)...)
+			cmd.Stdin = strings.NewReader(input)
+		}
+	}
+	
+	if cmd == nil {
+		cmd = exec.Command("echo", "No search results")
+	}
+	
+	return cmd
+}
+
+// buildFzfArgs converts fzf options to command line arguments
+func (a *App) buildFzfArgs(opts fzf.Options) []string {
+	args := []string{}
+	
+	if opts.Prompt != "" {
+		args = append(args, "--prompt", opts.Prompt)
+	}
+	if opts.Header != "" {
+		args = append(args, "--header", opts.Header)
+	}
+	if opts.Height != "" {
+		args = append(args, "--height", opts.Height)
+	}
+	if opts.Layout != "" {
+		args = append(args, "--layout", opts.Layout)
+	}
+	if opts.Border {
+		args = append(args, "--border")
+	}
+	if opts.InitialQuery != "" {
+		args = append(args, "--query", opts.InitialQuery)
+	}
+	
+	return args
+}
+
+
+// parseFzfResults parses the output from fzf and creates search results
+func (a *App) parseFzfResults(mode models.SearchMode) tea.Msg {
+	// Read from stdout file or use other mechanism to get fzf output
+	// For now, return empty results
+	// TODO: Implement proper result parsing
+	
+	results := []models.SearchResultItem{}
+	
+	return models.SearchResultsMsg{
+		Mode:    mode,
+		Query:   "", // TODO: Extract query from fzf
+		Results: results,
+		Error:   nil,
+	}
+}
+
+// updatePreviewFromSearch updates the preview panel with search result content
+func (a *App) updatePreviewFromSearch(result models.SearchResultItem) tea.Cmd {
+	return func() tea.Msg {
+		var content string
+		var contentType models.PreviewType
+		
+		switch result.Type {
+		case "file":
+			// Read file content for preview
+			filePath := result.Path
+			if data, err := os.ReadFile(filePath); err == nil {
+				content = string(data)
+			} else {
+				content = fmt.Sprintf("Error reading file: %v", err)
+			}
+			contentType = models.PreviewFile
+			
+		case "commit":
+			// Get commit diff for preview
+			content = fmt.Sprintf("Commit: %s\nRepository: %s\n\n%s", 
+				result.Hash, result.Repository, result.DisplayText)
+			contentType = models.PreviewCommit
+		}
+		
+		return models.PreviewContentMsg{
+			Content:     content,
+			ContentType: contentType,
+			FilePath:    result.Path,
+			CommitHash:  result.Hash,
+		}
 	}
 }
 
