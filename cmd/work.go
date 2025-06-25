@@ -128,7 +128,7 @@ Examples:
   gman work stash pop                   # Apply and remove latest stash
   gman work stash list                  # List all stashes
   gman work stash clear                 # Clear all stashes`,
-	RunE:    runStash, // Reuse existing stash command logic
+	RunE:    batchStashCmd.RunE, // Use existing batch stash logic
 	Aliases: []string{"st"},
 }
 
@@ -150,8 +150,8 @@ func init() {
 	// Copy flags from original commands
 	copyCommandFlags(workStatusCmd, statusCmd)
 	copyCommandFlags(workSyncCmd, syncCmd)
-	copyCommandFlags(workCommitCmd, commitCmd)
-	copyCommandFlags(workPushCmd, pushCmd)
-	copyCommandFlags(workPullCmd, pullCmd)
-	copyCommandFlags(workStashCmd, stashCmd)
+	copyCommandFlags(workCommitCmd, batchCommitCmd)
+	copyCommandFlags(workPushCmd, batchPushCmd)
+	copyCommandFlags(workPullCmd, batchPullCmd)
+	copyCommandFlags(workStashCmd, batchStashCmd)
 }

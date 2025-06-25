@@ -4,7 +4,242 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-gman is a Git repository management CLI tool built in Go. It allows developers to manage multiple Git repositories efficiently with features like status checking, quick switching, batch operations, and shell integration.
+gman is a Git repository management CLI tool built in Go. It allows developers to manage multiple Git repositories efficiently with features like status checking, quick switching, batch operations, shell integration, and advanced workflow automation.
+
+## Recent Major Enhancements (Optimization Blueprint v3.0)
+
+### P0: Core Stability & Security ✅
+- **P0.1: File Locking System** - Implemented concurrent configuration protection using github.com/gofrs/flock
+- **P0.2: Git Error Handling** - Enhanced fetch failure detection with SyncError tracking
+- **P0.3: Command Injection Security** - Added external tool validation and argument separation
+
+### P1: User Experience & Consistency ✅  
+- **P1.1: TUI Search Enhancement** - Added updatePreview method and improved search functionality
+- **P1.2: Onboarding Wizard System** - Complete new user setup with repository discovery
+- **P1.3: Command Structure Reorganization** - Intuitive command grouping with shortcuts
+- **P1.4: TUI Evolution to Interactive Command Center** - Enhanced dashboard with Actions panel
+
+## New Command Structure (P1.3)
+
+gman now features a reorganized command structure with logical grouping and intuitive shortcuts:
+
+### Command Groups
+- **`gman repo` (r)** - Repository management (add, remove, list, groups)
+- **`gman work` (w)** - Git workflow operations (status, sync, commit, push, branch)
+- **`gman quick` (q)** - Quick access to common operations
+- **`gman tools` (t)** - Advanced utilities (dashboard, search, worktree, setup)
+
+### Usage Examples
+```bash
+# Repository management
+gman repo add myproject /path/to/project
+gman r list                          # Using shortcut
+gman repo group create webdev frontend backend
+
+# Git workflow
+gman work status --extended
+gman w sync --group webdev           # Using shortcut
+gman work commit -m "Fix bug" --add
+
+# Quick access
+gman quick status                    # No nested structure
+gman q switch                        # Direct shortcuts
+
+# Advanced tools
+gman tools dashboard
+gman t find "config.yaml"            # Using shortcut
+gman tools setup discover ~/Projects
+```
+
+### Backward Compatibility
+All original commands remain functional - users can adopt the new structure gradually without breaking existing workflows.
+
+## Onboarding System (P1.2)
+
+### Setup Wizard
+- **`gman setup`** - Interactive 3-step setup wizard for new users
+- **Step 1**: Repository discovery with intelligent alias generation
+- **Step 2**: Basic configuration (sync mode, parallel jobs, display preferences)
+- **Step 3**: Quick tutorial with personalized examples
+
+### Repository Discovery
+- **`gman setup discover [path]`** - Automatic Git repository detection
+- **`--depth N`** - Control search depth (default: 3 levels)
+- **`--auto-confirm`** - Skip interactive selection
+- **Smart alias generation** from directory names
+- **Duplicate detection** and path normalization
+
+### New User Experience
+- **`gman onboarding welcome`** - Contextual welcome message
+- **First-run detection** with automatic setup wizard offering
+- **Personalized guidance** using actual repository configuration
+- **Progressive learning** through contextual tutorials
+
+## Enhanced TUI Dashboard (P1.4)
+
+### Interactive Command Center
+The TUI dashboard has evolved from a monitoring interface to a comprehensive interactive command center with enhanced functionality:
+
+### New Panel Layout
+The dashboard now features a **2x3 panel layout** providing more workspace and functionality:
+
+```
+┌─ Repositories (1) ─┬─ Status (2) ──────┬─ Actions (5) ────┐
+│ • Select repos     │ • Detailed status │ • Quick commands │
+│ • Filter & search  │ • Branch info     │ • Git operations │
+│ • Group management │ • File changes    │ • Interactive    │
+└────────────────────┴───────────────────┴──────────────────┘
+┌─ Search (3) ────────────────────────────┬─ Preview (4) ────┐
+│ • Files & commits across repos         │ • File content   │
+│ • Integrated fzf support              │ • Commit details │
+│ • Real-time results                    │ • Live updates   │
+└────────────────────────────────────────┴──────────────────┘
+```
+
+### Actions Panel Features
+The new **Actions Panel (5)** provides:
+
+#### Repository Operations
+- **Refresh Status** - Update repository information
+- **Open in Terminal** - Launch external terminal at repo location
+- **Open in File Manager** - Browse repo with system file manager
+
+#### Git Operations (Context-Aware)
+- **Sync Repository** - Pull latest changes from remote
+- **Commit Changes** - Interactive commit with staging (only shown when dirty)
+- **Push Changes** - Push local commits to remote (only shown when ahead)
+- **Stash/Pop Changes** - Manage uncommitted work (conditional display)
+
+#### Branch Management
+- **Switch Branch** - Interactive branch selection
+- **Create Branch** - New branch from current commit
+- **Merge Branch** - Merge operations with conflict detection
+
+#### Advanced Operations
+- **Create Worktree** - Parallel development workspaces
+- **Compare Files** - Diff between branches/repos
+- **View Log** - Commit history exploration
+
+### Navigation Enhancements
+- **Keyboard shortcuts**: 1-5 for direct panel access
+- **Tab/Shift+Tab**: Seamless panel navigation
+- **Quick actions**: Single-key operations (r=refresh, s=sync, c=commit, p=push)
+- **Context-aware display**: Actions adapt to repository state
+
+### Real-time Feedback
+- **Action execution tracking** with progress indicators
+- **Result display** with auto-hide after 3 seconds
+- **Error handling** with user-friendly messages
+- **Non-blocking operations** maintaining dashboard responsiveness
+
+## Security Enhancements (P0.3)
+
+### External Command Security
+- **Diff tool validation** with whitelist of allowed tools
+- **Command injection prevention** using `--` argument separators
+- **Path validation** and character filtering
+- **Safe tool execution** with proper argument handling
+
+### Allowed Diff Tools
+```
+diff, meld, vimdiff, gvimdiff, kdiff3, opendiff, p4merge, 
+xxdiff, tkdiff, kompare, emerge, winmerge, code, subl, 
+atom, delta, difft
+```
+
+## Technical Debt Analysis (P2.1) ✅
+
+### Refactoring Assessment Complete
+Comprehensive analysis of the gman codebase identified key improvement opportunities with prioritized implementation roadmap:
+
+### Critical Issues Identified
+
+#### High Priority (High Impact, Medium Effort)
+1. **Giant Method Smell** - `cmd/batch.go` contains 768 lines with 7 distinct operations
+   - Multiple batch commands (commit, push, stash) in single file
+   - Repeated patterns and flag setup across operations
+   - Requires decomposition into domain-specific modules
+
+2. **Interface Segregation Violation** - `internal/git/git.go` Manager has 34 methods
+   - Single class covering diverse responsibilities (status, branches, worktrees)
+   - No interface abstraction limiting testability
+   - Needs domain-specific interfaces: `StatusReader`, `BranchManager`, `WorktreeManager`
+
+3. **Repeated Instantiation Anti-Pattern**
+   - 45 occurrences of `config.NewManager()` across commands
+   - 21 occurrences of `git.NewManager()` across commands
+   - Requires dependency injection framework
+
+#### Medium Priority (Medium Impact, Low-Medium Effort)
+4. **Function Length Issues** - Multiple functions exceed 160 lines
+   - `runSync()` in sync.go: 162 lines with multiple responsibilities
+   - Complex nested logic without proper decomposition
+   - Requires function extraction and responsibility separation
+
+5. **Missing Abstractions** - No interfaces for Git operations
+   - Limits testability and modularity
+   - Tight coupling between commands and concrete implementations
+
+#### Low Priority (Various Impact, Low Effort)
+6. **TODO Technical Debt** - 13 TODO comments in `actions.go`
+7. **Modernization Gap** - Underutilized Go 1.24 features
+8. **Error Handling** - Inconsistent patterns across commands
+9. **Code Duplication** - Repeated repository filtering logic
+
+### Proposed Refactoring Structure
+
+#### Phase 1: Decomposition
+```
+cmd/
+├── batch/
+│   ├── commit.go    # Extracted from batch.go
+│   ├── push.go      # Extracted from batch.go  
+│   ├── stash.go     # Extracted from batch.go
+│   └── common.go    # Shared batch operation logic
+└── ...
+
+internal/
+├── git/
+│   ├── interfaces.go    # Git operation interfaces
+│   ├── status.go       # StatusReader implementation
+│   ├── branch.go       # BranchManager implementation
+│   ├── worktree.go     # WorktreeManager implementation
+│   └── manager.go      # Facade combining interfaces
+└── di/
+    └── container.go    # Dependency injection setup
+```
+
+#### Phase 2: Interface Abstraction
+```go
+// Git operation interfaces
+type StatusReader interface {
+    GetRepoStatus(alias, path string) types.RepoStatus
+    GetAllRepoStatus(repos map[string]string) ([]types.RepoStatus, error)
+}
+
+type BranchManager interface {
+    GetBranches(path string, includeRemote bool) ([]string, error)
+    CreateBranch(path, branchName string) error
+    SwitchBranch(path, branchName string) error
+}
+
+type GitOperations interface {
+    StatusReader
+    BranchManager
+    WorktreeManager
+}
+```
+
+### Modernization Opportunities
+- **Context Propagation**: Add cancellation support to long operations
+- **Generics**: Leverage for repository operation patterns
+- **Structured Errors**: Replace string-based error handling
+- **Functional Options**: Modern configuration patterns
+
+### Implementation Priority
+1. **Immediate** (P2.1): Decompose batch.go and extract Git interfaces
+2. **Short-term** (P2.2): Implement dependency injection
+3. **Medium-term** (P2.3): Function decomposition and error standardization
 
 ## Development Commands
 

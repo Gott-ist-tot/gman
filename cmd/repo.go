@@ -87,7 +87,7 @@ Examples:
   gman repo recent              # Show recent repositories
   gman repo recent --limit 5    # Show only 5 most recent`,
 	RunE:    runRecent, // Reuse existing recent command logic
-	Aliases: []string{"r"},
+	Aliases: []string{"recent"},
 }
 
 func init() {
@@ -105,11 +105,4 @@ func init() {
 	// Copy flags from original commands
 	copyCommandFlags(repoListCmd, listCmd)
 	copyCommandFlags(repoRecentCmd, recentCmd)
-}
-
-// copyCommandFlags copies flags from source command to destination
-func copyCommandFlags(dst, src *cobra.Command) {
-	src.Flags().VisitAll(func(flag *cobra.Flag) {
-		dst.Flags().AddFlag(flag)
-	})
 }

@@ -88,6 +88,15 @@ type CommandExecutedMsg struct {
 // HelpToggleMsg is sent when help is toggled
 type HelpToggleMsg struct{}
 
+// ActionCompleteMsg is sent when an action completes
+type ActionCompleteMsg struct {
+	Result string
+	Error  error
+}
+
+// HideResultMsg is sent to hide action results
+type HideResultMsg struct{}
+
 // ExitMsg is sent when the application should exit
 type ExitMsg struct{}
 

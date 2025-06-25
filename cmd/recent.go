@@ -21,7 +21,7 @@ This helps you quickly switch to repositories you've been working with recently.
 Examples:
   gman recent           # Show recent repositories
   gman recent --limit 5 # Show only the 5 most recent`,
-	Aliases: []string{"r"},
+	Aliases: []string{},
 	RunE:    runRecent,
 }
 

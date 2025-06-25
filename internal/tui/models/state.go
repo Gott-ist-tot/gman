@@ -44,6 +44,7 @@ const (
 	StatusPanel
 	SearchPanel
 	PreviewPanel
+	ActionsPanel
 )
 
 func (p PanelType) String() string {
@@ -56,6 +57,8 @@ func (p PanelType) String() string {
 		return "search"
 	case PreviewPanel:
 		return "preview"
+	case ActionsPanel:
+		return "actions"
 	default:
 		return "unknown"
 	}
@@ -241,12 +244,12 @@ func (s *AppState) GetSelectedRepository() *RepoDisplayItem {
 
 // NextPanel moves focus to the next panel
 func (s *AppState) NextPanel() {
-	s.FocusedPanel = (s.FocusedPanel + 1) % 4
+	s.FocusedPanel = (s.FocusedPanel + 1) % 5
 }
 
 // PrevPanel moves focus to the previous panel
 func (s *AppState) PrevPanel() {
-	s.FocusedPanel = (s.FocusedPanel + 3) % 4 // +3 is equivalent to -1 mod 4
+	s.FocusedPanel = (s.FocusedPanel + 4) % 5 // +4 is equivalent to -1 mod 5
 }
 
 // SetFocusedPanel sets the focused panel

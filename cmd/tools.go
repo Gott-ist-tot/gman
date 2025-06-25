@@ -40,7 +40,7 @@ Examples:
   gman tools find                      # Interactive file search
   gman tools find --commits            # Search commit messages
   gman tools find --content "TODO"     # Search file contents`,
-	RunE:    runFind, // Reuse existing find command logic
+	RunE:    findCmd.RunE, // Use existing find command logic
 	Aliases: []string{"search", "f"},
 }
 
@@ -57,7 +57,7 @@ Examples:
   gman tools index build              # Build search index
   gman tools index rebuild            # Rebuild search index
   gman tools index status             # Show index status`,
-	RunE:    runIndex, // Reuse existing index command logic
+	RunE:    indexCmd.RunE, // Use existing index command logic
 	Aliases: []string{"idx"},
 }
 
@@ -93,7 +93,7 @@ Examples:
   gman tools worktree add backend feature-auth    # Create worktree for feature branch
   gman tools worktree list backend                # List worktrees for repository
   gman tools worktree remove backend-feature      # Remove worktree`,
-	RunE:    runWorktree, // Reuse existing worktree command logic
+	RunE:    worktreeCmd.RunE, // Use existing worktree command logic
 	Aliases: []string{"wt"},
 }
 

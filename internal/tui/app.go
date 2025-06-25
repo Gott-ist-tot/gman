@@ -24,6 +24,7 @@ type App struct {
 	statusPanel     *panels.StatusPanel
 	searchPanel     *panels.SearchPanel
 	previewPanel    *panels.PreviewPanel
+	actionsPanel    *panels.ActionsPanel
 
 	// UI state
 	ready  bool
@@ -40,6 +41,7 @@ func NewApp(configMgr *config.Manager) *App {
 		statusPanel:     panels.NewStatusPanel(state),
 		searchPanel:     panels.NewSearchPanel(state),
 		previewPanel:    panels.NewPreviewPanel(state),
+		actionsPanel:    panels.NewActionsPanel(state),
 		ready:           false,
 		quitting:        false,
 	}
@@ -53,6 +55,7 @@ func (a *App) Init() tea.Cmd {
 		a.statusPanel.Init(),
 		a.searchPanel.Init(),
 		a.previewPanel.Init(),
+		a.actionsPanel.Init(),
 	)
 }
 
@@ -136,6 +139,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case models.PreviewPanel:
 		_, cmd = a.previewPanel.Update(msg)
 		cmds = append(cmds, cmd)
+	case models.ActionsPanel:
+		_, cmd = a.actionsPanel.Update(msg)
+		cmds = append(cmds, cmd)
 	}
 
 	// Update other panels with non-input messages
@@ -150,6 +156,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 		
 		_, cmd = a.previewPanel.Update(msg)
+		cmds = append(cmds, cmd)
+		
+		_, cmd = a.actionsPanel.Update(msg)
 		cmds = append(cmds, cmd)
 	}
 
@@ -206,6 +215,10 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		a.state.SetFocusedPanel(models.PreviewPanel)
 		return models.PanelFocusCmd(models.PreviewPanel)
 
+	case "5":
+		a.state.SetFocusedPanel(models.ActionsPanel)
+		return models.PanelFocusCmd(models.ActionsPanel)
+
 	case "r":
 		// Refresh all repository status
 		return models.RefreshCmd(true)
@@ -223,9 +236,10 @@ func (a *App) renderDashboard() string {
 	width := a.state.WindowWidth
 	height := a.state.WindowHeight
 
-	// Calculate panel dimensions
-	leftWidth := width / 2 - 2
-	rightWidth := width - leftWidth - 3
+	// Calculate panel dimensions for 2x3 layout
+	leftWidth := width / 3 - 1
+	middleWidth := width / 3 - 1  
+	rightWidth := width - leftWidth - middleWidth - 2
 	topHeight := height / 2 - 2
 	bottomHeight := height - topHeight - 4
 
@@ -241,15 +255,23 @@ func (a *App) renderDashboard() string {
 	statusPanel := a.renderPanel(
 		a.statusPanel.View(),
 		"Status (2)",
-		rightWidth,
+		middleWidth,
 		topHeight,
 		a.state.FocusedPanel == models.StatusPanel,
+	)
+
+	actionsPanel := a.renderPanel(
+		a.actionsPanel.View(),
+		"Actions (5)",
+		rightWidth,
+		topHeight,
+		a.state.FocusedPanel == models.ActionsPanel,
 	)
 
 	searchPanel := a.renderPanel(
 		a.searchPanel.View(),
 		"Search (3)",
-		leftWidth,
+		leftWidth + middleWidth + 1,
 		bottomHeight,
 		a.state.FocusedPanel == models.SearchPanel,
 	)
@@ -262,12 +284,14 @@ func (a *App) renderDashboard() string {
 		a.state.FocusedPanel == models.PreviewPanel,
 	)
 
-	// Arrange panels in 2x2 grid
+	// Arrange panels in 2x3 grid
 	topRow := lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		repoPanel,
 		" ",
 		statusPanel,
+		" ",
+		actionsPanel,
 	)
 
 	bottomRow := lipgloss.JoinHorizontal(
@@ -318,7 +342,7 @@ func (a *App) renderHelp() string {
 
 GLOBAL NAVIGATION:
   Tab / Shift+Tab     Navigate between panels
-  1 / 2 / 3 / 4       Jump to specific panel
+  1 / 2 / 3 / 4 / 5   Jump to specific panel
   ? / h               Toggle this help
   q / Ctrl+C          Quit application
 
@@ -347,6 +371,16 @@ PREVIEW PANEL (4):
   ↓ / j               Scroll down
   Page Up/Down        Page scroll
   Home / End          Top / Bottom
+
+ACTIONS PANEL (5):
+  ↑ / k               Move up action list
+  ↓ / j               Move down action list
+  Enter               Execute selected action
+  r                   Quick refresh
+  s                   Quick sync
+  c                   Quick commit
+  p                   Quick push
+  S                   Quick stash
 
 GLOBAL ACTIONS:
   r                   Refresh all repositories
