@@ -1,11 +1,13 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/gofrs/flock"
 	"github.com/spf13/viper"
 	"gman/pkg/types"
 	"gopkg.in/yaml.v3"
@@ -15,6 +17,7 @@ import (
 type Manager struct {
 	config     *types.Config
 	configPath string
+	fileLock   *flock.Flock
 }
 
 // NewManager creates a new configuration manager
@@ -25,6 +28,25 @@ func NewManager() *Manager {
 // Load loads the configuration from file
 func (m *Manager) Load() error {
 	configPath := m.getConfigPath()
+	
+	// Initialize file lock if not already done
+	if m.fileLock == nil {
+		lockPath := configPath + ".lock"
+		m.fileLock = flock.New(lockPath)
+	}
+	
+	// Acquire shared lock for reading
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	
+	locked, err := m.fileLock.TryRLockContext(ctx, time.Millisecond*100)
+	if err != nil {
+		return fmt.Errorf("error acquiring read lock: %w", err)
+	}
+	if !locked {
+		return fmt.Errorf("timeout acquiring read lock on config file")
+	}
+	defer m.fileLock.Unlock()
 	
 	// Check if config file exists
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
@@ -100,6 +122,25 @@ func (m *Manager) RemoveRepository(alias string) error {
 func (m *Manager) Save() error {
 	configPath := m.getConfigPath()
 
+	// Initialize file lock if not already done
+	if m.fileLock == nil {
+		lockPath := configPath + ".lock"
+		m.fileLock = flock.New(lockPath)
+	}
+	
+	// Acquire exclusive lock for writing
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	
+	locked, err := m.fileLock.TryLockContext(ctx, time.Millisecond*100)
+	if err != nil {
+		return fmt.Errorf("error acquiring write lock: %w", err)
+	}
+	if !locked {
+		return fmt.Errorf("timeout acquiring write lock on config file")
+	}
+	defer m.fileLock.Unlock()
+
 	// Ensure config directory exists
 	configDir := filepath.Dir(configPath)
 	if err := os.MkdirAll(configDir, 0755); err != nil {
@@ -112,9 +153,16 @@ func (m *Manager) Save() error {
 		return fmt.Errorf("error marshaling config: %w", err)
 	}
 
-	// Write to file
-	if err := os.WriteFile(configPath, data, 0644); err != nil {
-		return fmt.Errorf("error writing config file: %w", err)
+	// Write to file atomically
+	tempPath := configPath + ".tmp"
+	if err := os.WriteFile(tempPath, data, 0644); err != nil {
+		return fmt.Errorf("error writing temp config file: %w", err)
+	}
+	
+	// Atomic move to final location
+	if err := os.Rename(tempPath, configPath); err != nil {
+		os.Remove(tempPath) // Clean up on failure
+		return fmt.Errorf("error moving temp config file: %w", err)
 	}
 
 	return nil
@@ -139,6 +187,11 @@ func (m *Manager) createDefaultConfig() error {
 	}
 
 	return m.Save()
+}
+
+// CreateDefaultConfig is a public version of createDefaultConfig for external use
+func (m *Manager) CreateDefaultConfig() error {
+	return m.createDefaultConfig()
 }
 
 // getConfigPath returns the configuration file path

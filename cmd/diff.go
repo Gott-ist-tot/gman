@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"gman/internal/config"
@@ -203,6 +204,11 @@ func runDiffCrossRepo(cmd *cobra.Command, args []string) error {
 }
 
 func runExternalDiffTool(gitMgr *git.Manager, repoPath, branch1, branch2, filePath, tool string) error {
+	// Validate the diff tool for security
+	if err := validateDiffTool(tool); err != nil {
+		return fmt.Errorf("invalid diff tool: %w", err)
+	}
+
 	// Get temporary files for both branches
 	file1, err := gitMgr.GetFileContentFromBranch(repoPath, branch1, filePath)
 	if err != nil {
@@ -229,8 +235,8 @@ func runExternalDiffTool(gitMgr *git.Manager, repoPath, branch1, branch2, filePa
 	}
 	defer os.Remove(tmpFile2)
 
-	// Launch external diff tool
-	cmd := exec.Command(tool, tmpFile1, tmpFile2)
+	// Launch external diff tool with proper argument separation
+	cmd := exec.Command(tool, "--", tmpFile1, tmpFile2)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -239,6 +245,11 @@ func runExternalDiffTool(gitMgr *git.Manager, repoPath, branch1, branch2, filePa
 }
 
 func runExternalCrossRepoDiffTool(gitMgr *git.Manager, repo1Path, repo2Path, filePath, tool string) error {
+	// Validate the diff tool for security
+	if err := validateDiffTool(tool); err != nil {
+		return fmt.Errorf("invalid diff tool: %w", err)
+	}
+
 	// Get file paths from both repositories
 	file1Path := filepath.Join(repo1Path, filePath)
 	file2Path := filepath.Join(repo2Path, filePath)
@@ -251,11 +262,78 @@ func runExternalCrossRepoDiffTool(gitMgr *git.Manager, repo1Path, repo2Path, fil
 		return fmt.Errorf("file '%s' does not exist in second repository", filePath)
 	}
 
-	// Launch external diff tool
-	cmd := exec.Command(tool, file1Path, file2Path)
+	// Launch external diff tool with proper argument separation
+	cmd := exec.Command(tool, "--", file1Path, file2Path)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 
 	return cmd.Run()
+}
+
+// validateDiffTool validates that the specified diff tool is safe to execute
+func validateDiffTool(tool string) error {
+	// Prevent empty tool names
+	if strings.TrimSpace(tool) == "" {
+		return fmt.Errorf("diff tool name cannot be empty")
+	}
+
+	// Whitelist of allowed diff tools
+	allowedTools := map[string]bool{
+		"diff":     true,
+		"meld":     true,
+		"vimdiff":  true,
+		"gvimdiff": true,
+		"kdiff3":   true,
+		"opendiff": true,
+		"p4merge":  true,
+		"xxdiff":   true,
+		"tkdiff":   true,
+		"kompare":  true,
+		"emerge":   true,
+		"winmerge": true,
+		"code":     true,  // VS Code
+		"subl":     true,  // Sublime Text
+		"atom":     true,  // Atom
+		"delta":    true,  // Delta (Rust-based diff tool)
+		"difft":    true,  // Difftastic
+	}
+
+	// Extract the base command (handle full paths)
+	toolBase := filepath.Base(tool)
+	
+	// Remove file extensions on Windows
+	if strings.HasSuffix(toolBase, ".exe") {
+		toolBase = strings.TrimSuffix(toolBase, ".exe")
+	}
+
+	// Check if the tool is in the whitelist
+	if !allowedTools[toolBase] {
+		return fmt.Errorf("diff tool '%s' is not in the allowed list. Allowed tools: %v", 
+			tool, getAllowedToolsList(allowedTools))
+	}
+
+	// Additional security checks
+	if strings.ContainsAny(tool, "&|;`$(){}[]<>") {
+		return fmt.Errorf("diff tool name contains invalid characters that could be used for command injection")
+	}
+
+	// Check if the tool exists in PATH (if not an absolute path)
+	if !filepath.IsAbs(tool) {
+		_, err := exec.LookPath(tool)
+		if err != nil {
+			return fmt.Errorf("diff tool '%s' not found in PATH: %w", tool, err)
+		}
+	}
+
+	return nil
+}
+
+// getAllowedToolsList returns a sorted list of allowed tools for error messages
+func getAllowedToolsList(allowedTools map[string]bool) []string {
+	var tools []string
+	for tool := range allowedTools {
+		tools = append(tools, tool)
+	}
+	return tools
 }

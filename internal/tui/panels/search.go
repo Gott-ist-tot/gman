@@ -2,6 +2,7 @@ package panels
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -227,4 +228,53 @@ func (s *SearchPanel) renderInstructions() string {
 	}
 
 	return content.String()
+}
+
+// updatePreview updates the preview panel with the currently selected search result
+func (s *SearchPanel) updatePreview() tea.Cmd {
+	if len(s.state.SearchState.Results) == 0 || s.state.SearchState.SelectedItem >= len(s.state.SearchState.Results) {
+		return nil
+	}
+	
+	result := s.state.SearchState.Results[s.state.SearchState.SelectedItem]
+	
+	return func() tea.Msg {
+		var content string
+		var contentType models.PreviewType
+		
+		switch result.Type {
+		case "file":
+			// Try to read file content for preview
+			if result.Path != "" {
+				if data, err := os.ReadFile(result.Path); err == nil {
+					content = string(data)
+				} else {
+					content = fmt.Sprintf("Error reading file: %v\n\nFile: %s\nRepository: %s", 
+						err, result.Path, result.Repository)
+				}
+			} else {
+				content = fmt.Sprintf("File: %s\nRepository: %s\n\nNo content available for preview.", 
+					result.DisplayText, result.Repository)
+			}
+			contentType = models.PreviewFile
+			
+		case "commit":
+			// Show commit information
+			content = fmt.Sprintf("Commit: %s\nRepository: %s\n\n%s", 
+				result.Hash, result.Repository, result.DisplayText)
+			contentType = models.PreviewCommit
+			
+		default:
+			content = fmt.Sprintf("Type: %s\nRepository: %s\nPath: %s\n\n%s",
+				result.Type, result.Repository, result.Path, result.DisplayText)
+			contentType = models.PreviewStatus
+		}
+		
+		return models.PreviewContentMsg{
+			Content:     content,
+			ContentType: contentType,
+			FilePath:    result.Path,
+			CommitHash:  result.Hash,
+		}
+	}
 }

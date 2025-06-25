@@ -178,6 +178,11 @@ func (g *Manager) isGitRepository(path string) bool {
 	return info.IsDir() || info.Mode().IsRegular() // Support for git worktrees
 }
 
+// IsGitRepository is a public version of isGitRepository for external use
+func (g *Manager) IsGitRepository(path string) bool {
+	return g.isGitRepository(path)
+}
+
 // isCurrentRepository checks if the given path is the current working directory
 func (g *Manager) isCurrentRepository(path string) bool {
 	absPath, err := filepath.Abs(path)
@@ -225,8 +230,16 @@ func (g *Manager) getWorkspaceStatus(path string) (types.WorkspaceStatus, error)
 
 // getSyncStatus gets the sync status with remote
 func (g *Manager) getSyncStatus(path string) (types.SyncStatus, error) {
-	// Fetch latest from remote (silently)
-	g.RunCommand(path, "fetch", "--quiet")
+	syncStatus := types.SyncStatus{}
+	
+	// Attempt to fetch latest from remote
+	_, err := g.RunCommand(path, "fetch", "--quiet")
+	if err != nil {
+		// If fetch fails, mark the sync error but continue with local state
+		syncStatus.SyncError = fmt.Errorf("failed to fetch from remote: %w", err)
+		// Return early with error status - we can't determine accurate sync state
+		return syncStatus, nil
+	}
 
 	// Get current branch
 	branch, err := g.getCurrentBranch(path)
@@ -258,10 +271,10 @@ func (g *Manager) getSyncStatus(path string) (types.SyncStatus, error) {
 	ahead, _ := strconv.Atoi(aheadOutput)
 	behind, _ := strconv.Atoi(behindOutput)
 
-	return types.SyncStatus{
-		Ahead:  ahead,
-		Behind: behind,
-	}, nil
+	syncStatus.Ahead = ahead
+	syncStatus.Behind = behind
+
+	return syncStatus, nil
 }
 
 // getLastCommit gets the last commit message

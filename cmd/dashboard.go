@@ -226,7 +226,7 @@ func buildTerminalError(diag TerminalDiagnostics) error {
 	msg.WriteString("  • Use --debug to see detailed diagnostic information\n")
 	msg.WriteString("  • Continue using CLI commands: gman status, gman list, etc.\n")
 	
-	return fmt.Errorf(msg.String())
+	return fmt.Errorf("%s", msg.String())
 }
 
 // printTerminalDiagnostics prints detailed diagnostic information

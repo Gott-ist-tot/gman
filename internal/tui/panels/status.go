@@ -170,6 +170,12 @@ func (s *StatusPanel) renderStatusOverview(status *types.RepoStatus) string {
 		syncIcon, 
 		syncStyle.Render(status.SyncStatus.String()))
 	lines = append(lines, syncLine)
+	
+	// Show sync error details if present
+	if status.SyncStatus.SyncError != nil {
+		errorLine := fmt.Sprintf("⚠️  Sync Error: %s", status.SyncStatus.SyncError.Error())
+		lines = append(lines, styles.StatusErrorStyle.Render(errorLine))
+	}
 
 	// Current branch
 	branchLine := fmt.Sprintf("🌿 Branch: %s", 

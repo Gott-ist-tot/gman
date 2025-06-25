@@ -14,10 +14,21 @@ var rootCmd = &cobra.Command{
 	Use:   "gman",
 	Short: "A multi-repository Git management tool",
 	Long: `gman is a CLI tool for managing multiple Git repositories efficiently.
-It allows you to track the status of multiple repositories, switch between them,
-and perform batch operations across all configured repositories.
 
-Complete documentation is available at https://github.com/yourusername/gman`,
+🚀 QUICK START:
+  gman setup                          # Interactive setup for new users
+  gman status                         # Check status of all repositories  
+  gman switch                         # Interactive repository switching
+  gman sync                           # Sync all repositories
+
+📁 COMMAND GROUPS:
+  gman repo    (r)                    # Repository management (add, remove, list)
+  gman work    (w)                    # Git workflow (status, sync, commit, push)
+  gman quick   (q)                    # Quick access to common operations
+  gman tools   (t)                    # Advanced tools (search, dashboard, worktree)
+
+💡 TIP: Use 'gman <group> --help' to see commands in each group.
+📚 Documentation: https://github.com/yourusername/gman`,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

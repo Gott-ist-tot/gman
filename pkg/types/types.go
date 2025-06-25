@@ -45,11 +45,17 @@ func (w WorkspaceStatus) String() string {
 
 // SyncStatus represents the sync status with remote
 type SyncStatus struct {
-	Ahead  int
-	Behind int
+	Ahead     int
+	Behind    int
+	SyncError error // Error during sync operation (e.g., fetch failure)
 }
 
 func (s SyncStatus) String() string {
+	// Check for sync errors first
+	if s.SyncError != nil {
+		return "❌ SYNC FAILED"
+	}
+	
 	if s.Ahead > 0 && s.Behind > 0 {
 		return fmt.Sprintf("🔄 %d↑ %d↓", s.Ahead, s.Behind)
 	} else if s.Ahead > 0 {
