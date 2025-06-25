@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"gman/internal/config"
+	"gman/internal/di"
 	"gman/pkg/types"
 )
 
@@ -107,14 +108,14 @@ func CreateTestRepository(t *testing.T, repo *TestRepository) error {
 	// Create all files
 	for filename, content := range repo.Files {
 		filePath := filepath.Join(repo.Path, filename)
-		
+
 		// Create directory if needed
 		if dir := filepath.Dir(filePath); dir != repo.Path {
 			if err := os.MkdirAll(dir, 0755); err != nil {
 				return fmt.Errorf("failed to create directory %s: %w", dir, err)
 			}
 		}
-		
+
 		if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
 			return fmt.Errorf("failed to create file %s: %w", filename, err)
 		}
@@ -133,14 +134,14 @@ func CreateTestRepository(t *testing.T, repo *TestRepository) error {
 		if err := runGitCommand(repo.Path, "checkout", "-b", branch); err != nil {
 			return fmt.Errorf("failed to create branch %s: %w", branch, err)
 		}
-		
+
 		// Make a small change in each branch
 		branchFile := filepath.Join(repo.Path, fmt.Sprintf("%s.txt", branch))
 		content := fmt.Sprintf("Content for branch %s\n", branch)
 		if err := os.WriteFile(branchFile, []byte(content), 0644); err != nil {
 			return err
 		}
-		
+
 		if err := runGitCommand(repo.Path, "add", fmt.Sprintf("%s.txt", branch)); err != nil {
 			return err
 		}
@@ -163,7 +164,7 @@ func CreateTestRepository(t *testing.T, repo *TestRepository) error {
 func CreateTestConfig(t *testing.T, configPath string, repos map[string]string, groups ...types.Group) (*TestConfig, error) {
 	t.Helper()
 
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	cfg := configMgr.GetConfig()
 	cfg.Repositories = repos
 	cfg.Groups = groups
@@ -194,7 +195,7 @@ func WithTestConfig(t *testing.T, configPath string, testFunc func(*TestConfig))
 		}
 	}()
 
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	configMgr.LoadFromPath(configPath)
 	cfg := configMgr.GetConfig()
 
@@ -229,7 +230,7 @@ func runGitCommand(dir string, args ...string) error {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("git %s failed in %s: %w\nOutput: %s", 
+		return fmt.Errorf("git %s failed in %s: %w\nOutput: %s",
 			strings.Join(args, " "), dir, err, string(output))
 	}
 	return nil
@@ -279,7 +280,7 @@ func AssertFileContains(t *testing.T, path, expectedContent string) {
 	}
 
 	if !strings.Contains(string(content), expectedContent) {
-		t.Errorf("File %s does not contain expected content.\nExpected: %s\nActual: %s", 
+		t.Errorf("File %s does not contain expected content.\nExpected: %s\nActual: %s",
 			path, expectedContent, string(content))
 	}
 }
@@ -313,12 +314,12 @@ func CreateMultipleRepos(t *testing.T, baseDir string, count int, prefix string)
 		repos[alias] = path
 
 		repo := &TestRepository{
-			Alias: alias,
-			Path:  path,
+			Alias:       alias,
+			Path:        path,
 			Description: fmt.Sprintf("Test repository %s", alias),
 			Files: map[string]string{
-				"README.md": fmt.Sprintf("# %s\n\nRepository %d in the %s series.\n", alias, i, prefix),
-				"main.go":   fmt.Sprintf("package main\n\nfunc main() {\n\tprintln(\"%s\")\n}\n", alias),
+				"README.md":  fmt.Sprintf("# %s\n\nRepository %d in the %s series.\n", alias, i, prefix),
+				"main.go":    fmt.Sprintf("package main\n\nfunc main() {\n\tprintln(\"%s\")\n}\n", alias),
 				"config.yml": fmt.Sprintf("name: %s\nversion: 1.0.%d\n", alias, i),
 			},
 		}
@@ -337,8 +338,8 @@ func CreateRepoWithWorktrees(t *testing.T, repoPath string, worktreeSpecs []Work
 
 	// First create the main repository
 	repo := &TestRepository{
-		Alias: "main-repo",
-		Path:  repoPath,
+		Alias:       "main-repo",
+		Path:        repoPath,
 		Description: "Repository with worktrees",
 	}
 

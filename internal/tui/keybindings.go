@@ -1,8 +1,9 @@
 package tui
 
 import (
-	"github.com/charmbracelet/lipgloss"
 	"gman/internal/tui/styles"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 // KeyBinding represents a keyboard shortcut
@@ -87,17 +88,17 @@ func GetAllKeyBindings() map[string][]KeyBinding {
 // RenderKeyBindings renders keyboard shortcuts in a formatted way
 func RenderKeyBindings(bindings []KeyBinding, title string) string {
 	var content []string
-	
+
 	// Title
 	titleStyle := styles.SubHeaderStyle.Bold(true)
 	content = append(content, titleStyle.Render(title))
 	content = append(content, "")
-	
+
 	// Key bindings
 	for _, binding := range bindings {
 		keyStyle := styles.HelpKeyStyle
 		descStyle := styles.HelpDescStyle
-		
+
 		line := lipgloss.JoinHorizontal(
 			lipgloss.Left,
 			keyStyle.Width(15).Render(binding.Key),
@@ -105,7 +106,7 @@ func RenderKeyBindings(bindings []KeyBinding, title string) string {
 		)
 		content = append(content, line)
 	}
-	
+
 	return lipgloss.JoinVertical(lipgloss.Left, content...)
 }
 
@@ -117,7 +118,7 @@ func RenderQuickHelp() string {
 		"q: Quit",
 		"r: Refresh",
 	}
-	
+
 	style := styles.MutedStyle.Italic(true)
 	return style.Render(lipgloss.JoinHorizontal(lipgloss.Left, quickHelp...))
 }
@@ -125,7 +126,7 @@ func RenderQuickHelp() string {
 // GetContextualHelp returns help text based on the current focused panel
 func GetContextualHelp(panelType string) string {
 	bindings := GetAllKeyBindings()
-	
+
 	switch panelType {
 	case "repositories", "Repository":
 		return RenderKeyBindings(bindings["Repository"], "Repository Panel")

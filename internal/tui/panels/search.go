@@ -35,7 +35,7 @@ func (s *SearchPanel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if s.state.FocusedPanel != models.SearchPanel {
 			return s, nil
 		}
-		
+
 		return s, s.handleKeyMsg(msg)
 
 	case models.SearchModeMsg:
@@ -60,7 +60,7 @@ func (s *SearchPanel) View() string {
 	if s.state.SearchState.Mode == models.SearchCommits {
 		modeIcon = "📝"
 	}
-	
+
 	modeStyle := styles.SubHeaderStyle
 	mode := modeStyle.Render(fmt.Sprintf("%s %s search", modeIcon, s.state.SearchState.Mode.String()))
 	content.WriteString(mode)
@@ -147,7 +147,7 @@ func (s *SearchPanel) launchFzf() tea.Cmd {
 	// Set search as active and launch fzf
 	s.state.SearchState.IsActive = true
 	s.state.SearchState.Query = "" // Will be filled by fzf
-	
+
 	return func() tea.Msg {
 		return models.FzfLaunchMsg{
 			Mode:  s.state.SearchState.Mode,
@@ -184,7 +184,7 @@ func (s *SearchPanel) renderSearching() string {
 	content += "Searching across all repositories\n\n"
 	content += "Note: fzf will open in a separate window.\n"
 	content += "Select your item and results will appear here."
-	
+
 	return styles.MutedStyle.Render(content)
 }
 
@@ -194,7 +194,7 @@ func (s *SearchPanel) renderInstructions() string {
 		"Search Instructions:",
 		"",
 		"/ or Enter - Search files",
-		"c - Search commits", 
+		"c - Search commits",
 		"Tab - Toggle search mode",
 		"",
 		"📁 File Search:",
@@ -203,7 +203,7 @@ func (s *SearchPanel) renderInstructions() string {
 		"  • Real-time preview in panel 4",
 		"",
 		"📝 Commit Search:",
-		"  • Search commit messages and authors", 
+		"  • Search commit messages and authors",
 		"  • Browse commit history across repos",
 		"  • View commit diffs in preview",
 		"",
@@ -235,13 +235,13 @@ func (s *SearchPanel) updatePreview() tea.Cmd {
 	if len(s.state.SearchState.Results) == 0 || s.state.SearchState.SelectedItem >= len(s.state.SearchState.Results) {
 		return nil
 	}
-	
+
 	result := s.state.SearchState.Results[s.state.SearchState.SelectedItem]
-	
+
 	return func() tea.Msg {
 		var content string
 		var contentType models.PreviewType
-		
+
 		switch result.Type {
 		case "file":
 			// Try to read file content for preview
@@ -249,27 +249,27 @@ func (s *SearchPanel) updatePreview() tea.Cmd {
 				if data, err := os.ReadFile(result.Path); err == nil {
 					content = string(data)
 				} else {
-					content = fmt.Sprintf("Error reading file: %v\n\nFile: %s\nRepository: %s", 
+					content = fmt.Sprintf("Error reading file: %v\n\nFile: %s\nRepository: %s",
 						err, result.Path, result.Repository)
 				}
 			} else {
-				content = fmt.Sprintf("File: %s\nRepository: %s\n\nNo content available for preview.", 
+				content = fmt.Sprintf("File: %s\nRepository: %s\n\nNo content available for preview.",
 					result.DisplayText, result.Repository)
 			}
 			contentType = models.PreviewFile
-			
+
 		case "commit":
 			// Show commit information
-			content = fmt.Sprintf("Commit: %s\nRepository: %s\n\n%s", 
+			content = fmt.Sprintf("Commit: %s\nRepository: %s\n\n%s",
 				result.Hash, result.Repository, result.DisplayText)
 			contentType = models.PreviewCommit
-			
+
 		default:
 			content = fmt.Sprintf("Type: %s\nRepository: %s\nPath: %s\n\n%s",
 				result.Type, result.Repository, result.Path, result.DisplayText)
 			contentType = models.PreviewStatus
 		}
-		
+
 		return models.PreviewContentMsg{
 			Content:     content,
 			ContentType: contentType,

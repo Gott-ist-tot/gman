@@ -7,9 +7,10 @@ import (
 	"path/filepath"
 	"time"
 
+	"gman/pkg/types"
+
 	"github.com/gofrs/flock"
 	"github.com/spf13/viper"
-	"gman/pkg/types"
 	"gopkg.in/yaml.v3"
 )
 
@@ -28,17 +29,17 @@ func NewManager() *Manager {
 // Load loads the configuration from file
 func (m *Manager) Load() error {
 	configPath := m.getConfigPath()
-	
+
 	// Initialize file lock if not already done
 	if m.fileLock == nil {
 		lockPath := configPath + ".lock"
 		m.fileLock = flock.New(lockPath)
 	}
-	
+
 	// Acquire shared lock for reading
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
-	
+
 	locked, err := m.fileLock.TryRLockContext(ctx, time.Millisecond*100)
 	if err != nil {
 		return fmt.Errorf("error acquiring read lock: %w", err)
@@ -47,7 +48,7 @@ func (m *Manager) Load() error {
 		return fmt.Errorf("timeout acquiring read lock on config file")
 	}
 	defer m.fileLock.Unlock()
-	
+
 	// Check if config file exists
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		// Config file not found, create default config
@@ -127,11 +128,11 @@ func (m *Manager) Save() error {
 		lockPath := configPath + ".lock"
 		m.fileLock = flock.New(lockPath)
 	}
-	
+
 	// Acquire exclusive lock for writing
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
-	
+
 	locked, err := m.fileLock.TryLockContext(ctx, time.Millisecond*100)
 	if err != nil {
 		return fmt.Errorf("error acquiring write lock: %w", err)
@@ -158,7 +159,7 @@ func (m *Manager) Save() error {
 	if err := os.WriteFile(tempPath, data, 0644); err != nil {
 		return fmt.Errorf("error writing temp config file: %w", err)
 	}
-	
+
 	// Atomic move to final location
 	if err := os.Rename(tempPath, configPath); err != nil {
 		os.Remove(tempPath) // Clean up on failure

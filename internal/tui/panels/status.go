@@ -36,7 +36,7 @@ func (s *StatusPanel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if s.state.FocusedPanel != models.StatusPanel {
 			return s, nil
 		}
-		
+
 		return s, s.handleKeyMsg(msg)
 
 	case models.RepositorySelectedMsg:
@@ -105,7 +105,7 @@ func (s *StatusPanel) renderLoading() string {
 	if repoName == "" {
 		repoName = "repository"
 	}
-	
+
 	content := fmt.Sprintf("Loading status for: %s\n\n", repoName)
 	content += "Fetching:\n"
 	content += "• Working directory status\n"
@@ -113,7 +113,7 @@ func (s *StatusPanel) renderLoading() string {
 	content += "• Remote sync status\n"
 	content += "• Recent commits\n\n"
 	content += "Please wait..."
-	
+
 	return styles.MutedStyle.Render(content)
 }
 
@@ -158,19 +158,19 @@ func (s *StatusPanel) renderStatusOverview(status *types.RepoStatus) string {
 	// Workspace status
 	workspaceIcon := styles.GetStatusIcon(status.Workspace.String())
 	workspaceStyle := styles.GetStatusStyle(status.Workspace.String())
-	workspaceLine := fmt.Sprintf("%s Workspace: %s", 
-		workspaceIcon, 
+	workspaceLine := fmt.Sprintf("%s Workspace: %s",
+		workspaceIcon,
 		workspaceStyle.Render(status.Workspace.String()))
 	lines = append(lines, workspaceLine)
 
 	// Sync status
 	syncIcon := styles.GetStatusIcon(status.SyncStatus.String())
 	syncStyle := styles.GetStatusStyle(status.SyncStatus.String())
-	syncLine := fmt.Sprintf("%s Sync: %s", 
-		syncIcon, 
+	syncLine := fmt.Sprintf("%s Sync: %s",
+		syncIcon,
 		syncStyle.Render(status.SyncStatus.String()))
 	lines = append(lines, syncLine)
-	
+
 	// Show sync error details if present
 	if status.SyncStatus.SyncError != nil {
 		errorLine := fmt.Sprintf("⚠️  Sync Error: %s", status.SyncStatus.SyncError.Error())
@@ -178,7 +178,7 @@ func (s *StatusPanel) renderStatusOverview(status *types.RepoStatus) string {
 	}
 
 	// Current branch
-	branchLine := fmt.Sprintf("🌿 Branch: %s", 
+	branchLine := fmt.Sprintf("🌿 Branch: %s",
 		styles.BodyStyle.Render(status.Branch))
 	lines = append(lines, branchLine)
 
@@ -206,7 +206,7 @@ func (s *StatusPanel) renderStatusOverview(status *types.RepoStatus) string {
 func (s *StatusPanel) renderExtendedInfo(status *types.RepoStatus) string {
 	var lines []string
 
-	lines = append(lines, "\n" + styles.SubHeaderStyle.Render("Extended Information:"))
+	lines = append(lines, "\n"+styles.SubHeaderStyle.Render("Extended Information:"))
 
 	// Last commit time
 	if !status.CommitTime.IsZero() {
@@ -232,7 +232,7 @@ func (s *StatusPanel) renderExtendedInfo(status *types.RepoStatus) string {
 func (s *StatusPanel) renderBranchInfo(status *types.RepoStatus) string {
 	var lines []string
 
-	lines = append(lines, "\n" + styles.SubHeaderStyle.Render("Branch Information:"))
+	lines = append(lines, "\n"+styles.SubHeaderStyle.Render("Branch Information:"))
 
 	// Current branch
 	currentLine := fmt.Sprintf("• %s (current)", status.Branch)
@@ -263,7 +263,7 @@ func (s *StatusPanel) renderStatusFooter() string {
 	// Keyboard shortcuts
 	shortcuts := []string{
 		"e: Extended",
-		"b: Branches", 
+		"b: Branches",
 		"r: Refresh",
 		"a: Auto-refresh",
 	}

@@ -12,23 +12,33 @@ var cfgFile string
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "gman",
-	Short: "A multi-repository Git management tool",
-	Long: `gman is a CLI tool for managing multiple Git repositories efficiently.
+	Short: "Modern multi-repository Git management tool",
+	Long: `gman is a production-ready CLI tool for efficiently managing multiple Git repositories.
 
 🚀 QUICK START:
-  gman setup                          # Interactive setup for new users
-  gman status                         # Check status of all repositories  
-  gman switch                         # Interactive repository switching
-  gman sync                           # Sync all repositories
+  gman tools setup                    # Interactive setup wizard for new users
+  gman work status                    # Check status of all repositories
+  gman switch                         # Interactive repository switching with search
+  gman tools dashboard                # Launch interactive TUI dashboard
 
-📁 COMMAND GROUPS:
-  gman repo    (r)                    # Repository management (add, remove, list)
-  gman work    (w)                    # Git workflow (status, sync, commit, push)
+📁 COMMAND GROUPS (with shortcuts):
+  gman repo    (r)                    # Repository management (add, remove, list, groups)
+  gman work    (w)                    # Git workflow (status, sync, commit, push, branch)
   gman quick   (q)                    # Quick access to common operations
-  gman tools   (t)                    # Advanced tools (search, dashboard, worktree)
+  gman tools   (t)                    # Advanced tools (search, dashboard, worktree, setup)
 
-💡 TIP: Use 'gman <group> --help' to see commands in each group.
-📚 Documentation: https://github.com/yourusername/gman`,
+🔧 BATCH OPERATIONS:
+  gman commit -m "message" --add      # Commit across multiple repositories
+  gman push --group frontend         # Push changes to repository groups
+  gman stash save "work in progress"  # Stash changes across repositories
+
+🔍 SEARCH & DISCOVERY:
+  gman tools find "config.yaml"      # Search files across all repositories
+  gman tools index build             # Build search index for fast searching
+  gman tools setup discover ~/Projects # Auto-discover Git repositories
+
+💡 TIP: Use 'gman <group> --help' to see all commands in each group.
+🏥 TROUBLESHOOTING: Use 'gman tools dashboard --debug' for TUI diagnostics.`,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

@@ -5,9 +5,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/spf13/cobra"
-	"gman/internal/config"
+	"gman/internal/di"
 	"gman/internal/display"
+
+	"github.com/spf13/cobra"
 )
 
 // addCmd represents the add command
@@ -28,7 +29,8 @@ The path must be a valid Git repository (contain .git directory).`,
 }
 
 func init() {
-	rootCmd.AddCommand(addCmd)
+	// Command is now available via: gman repo add
+	// Removed direct rootCmd registration to avoid duplication
 }
 
 func runAdd(cmd *cobra.Command, args []string) error {
@@ -69,7 +71,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load configuration
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	if err := configMgr.Load(); err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}

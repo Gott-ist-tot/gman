@@ -58,14 +58,14 @@ func TestRepositorySelector_SelectRepository(t *testing.T) {
 		{
 			name: "fuzzy match multiple results",
 			repos: map[string]string{
-				"backend-api":     "/path/to/api",
-				"backend-worker":  "/path/to/worker",
-				"frontend-web":    "/path/to/web",
+				"backend-api":    "/path/to/api",
+				"backend-worker": "/path/to/worker",
+				"frontend-web":   "/path/to/web",
 			},
-			input:          "backend\n",
-			expectError:    true,
-			errorContains:  "ambiguous selection",
-			description:    "Should fail with multiple fuzzy matches",
+			input:         "backend\n",
+			expectError:   true,
+			errorContains: "ambiguous selection",
+			description:   "Should fail with multiple fuzzy matches",
 		},
 		{
 			name: "invalid numeric selection",
@@ -145,49 +145,49 @@ func TestRepositorySelector_SelectRepository(t *testing.T) {
 // TestRepositorySelector_FuzzyMatch tests the fuzzy matching functionality in isolation
 func TestRepositorySelector_FuzzyMatch(t *testing.T) {
 	repos := map[string]string{
-		"backend-api":       "/path/to/api",
-		"backend-worker":    "/path/to/worker", 
-		"backend-database":  "/path/to/db",
-		"frontend-web":      "/path/to/web",
-		"frontend-mobile":   "/path/to/mobile",
-		"shared-utils":      "/path/to/utils",
+		"backend-api":      "/path/to/api",
+		"backend-worker":   "/path/to/worker",
+		"backend-database": "/path/to/db",
+		"frontend-web":     "/path/to/web",
+		"frontend-mobile":  "/path/to/mobile",
+		"shared-utils":     "/path/to/utils",
 	}
 
 	selector := NewRepositorySelector(repos)
 
 	tests := []struct {
-		input    string
-		expected []string
+		input       string
+		expected    []string
 		description string
 	}{
 		{
-			input:    "backend",
-			expected: []string{"backend-api", "backend-worker", "backend-database"},
+			input:       "backend",
+			expected:    []string{"backend-api", "backend-worker", "backend-database"},
 			description: "Should match all backend repositories",
 		},
 		{
-			input:    "front",
-			expected: []string{"frontend-web", "frontend-mobile"},
+			input:       "front",
+			expected:    []string{"frontend-web", "frontend-mobile"},
 			description: "Should match all frontend repositories",
 		},
 		{
-			input:    "api",
-			expected: []string{"backend-api"},
+			input:       "api",
+			expected:    []string{"backend-api"},
 			description: "Should match single repository",
 		},
 		{
-			input:    "nonexistent",
-			expected: []string{},
+			input:       "nonexistent",
+			expected:    []string{},
 			description: "Should return empty for no matches",
 		},
 		{
-			input:    "",
-			expected: []string{"backend-api", "backend-worker", "backend-database", "frontend-web", "frontend-mobile", "shared-utils"}, // Empty string matches all
+			input:       "",
+			expected:    []string{"backend-api", "backend-worker", "backend-database", "frontend-web", "frontend-mobile", "shared-utils"}, // Empty string matches all
 			description: "Empty input matches all (contains behavior)",
 		},
 		{
-			input:    "BACKEND",
-			expected: []string{"backend-api", "backend-worker", "backend-database"},
+			input:       "BACKEND",
+			expected:    []string{"backend-api", "backend-worker", "backend-database"},
 			description: "Should be case insensitive",
 		},
 	}
@@ -237,16 +237,16 @@ func TestRepositorySelector_FuzzyMatch(t *testing.T) {
 func TestSwitchTargetSelector_SelectTarget(t *testing.T) {
 	targets := []types.SwitchTarget{
 		{
-			Alias:       "backend",
-			Path:        "/path/to/backend",
-			Type:        "repository",
-			RepoAlias:   "backend",
+			Alias:     "backend",
+			Path:      "/path/to/backend",
+			Type:      "repository",
+			RepoAlias: "backend",
 		},
 		{
-			Alias:       "frontend",
-			Path:        "/path/to/frontend", 
-			Type:        "repository",
-			RepoAlias:   "frontend",
+			Alias:     "frontend",
+			Path:      "/path/to/frontend",
+			Type:      "repository",
+			RepoAlias: "frontend",
 		},
 		{
 			Alias:       "backend-feature",
@@ -418,9 +418,9 @@ func TestSwitchTargetSelector_Sorting(t *testing.T) {
 // TestSwitchTargetSelector_EmptyTargets tests behavior with empty target list
 func TestSwitchTargetSelector_EmptyTargets(t *testing.T) {
 	selector := NewSwitchTargetSelector([]types.SwitchTarget{})
-	
+
 	result, err := selector.SelectTarget()
-	
+
 	if err == nil {
 		t.Error("Expected error with empty targets")
 	}
@@ -505,7 +505,7 @@ func TestConcurrentSelection(t *testing.T) {
 		go func(index int) {
 			// Create pipe for this goroutine
 			r, w, _ := os.Pipe()
-			
+
 			// Provide different inputs
 			go func() {
 				defer w.Close()
@@ -591,12 +591,12 @@ func TestRepositorySelector_LargeDataset(t *testing.T) {
 
 	// Test fuzzy matching with large dataset
 	tests := []struct {
-		input    string
-		maxTime  int // milliseconds
+		input   string
+		maxTime int // milliseconds
 	}{
-		{"repo", 100},     // Should be fast even with many matches
-		{"5000", 50},      // Specific match should be very fast
-		{"xyz", 10},       // No matches should be fastest
+		{"repo", 100}, // Should be fast even with many matches
+		{"5000", 50},  // Specific match should be very fast
+		{"xyz", 10},   // No matches should be fastest
 	}
 
 	for _, tt := range tests {
@@ -624,7 +624,7 @@ func TestRepositorySelector_LargeDataset(t *testing.T) {
 func createTestStdin(input string) (io.Reader, func()) {
 	r, w, _ := os.Pipe()
 	oldStdin := os.Stdin
-	
+
 	go func() {
 		defer w.Close()
 		w.Write([]byte(input))

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/spf13/cobra"
-	"gman/internal/config"
+	"gman/internal/di"
 	"gman/internal/display"
-	"gman/internal/git"
+
+	"github.com/spf13/cobra"
 )
 
 var extendedStatus bool
@@ -27,13 +27,14 @@ Use --extended to see additional information like file change counts and commit 
 }
 
 func init() {
-	rootCmd.AddCommand(statusCmd)
+	// Command is now available via: gman work status
+	// Removed direct rootCmd registration to avoid duplication
 	statusCmd.Flags().BoolVarP(&extendedStatus, "extended", "e", false, "Show extended information (file changes, commit times)")
 }
 
 func runStatus(cmd *cobra.Command, args []string) error {
 	// Load configuration
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	if err := configMgr.Load(); err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
@@ -45,7 +46,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	// Get status for all repositories
-	gitMgr := git.NewManager()
+	gitMgr := di.GitManager()
 	statuses, err := gitMgr.GetAllRepoStatus(cfg.Repositories)
 	if err != nil {
 		return fmt.Errorf("failed to get repository status: %w", err)

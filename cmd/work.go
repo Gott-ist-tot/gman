@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"gman/cmd/batch"
+
 	"github.com/spf13/cobra"
 )
 
@@ -76,7 +78,7 @@ Examples:
   gman work commit -m "Update dependencies"     # Commit with message
   gman work commit -m "Fix bug" --add           # Add and commit
   gman work commit -m "Release v1.0" --group prod  # Commit specific group`,
-	RunE:    runBatchCommit, // Use existing batch commit logic
+	RunE:    batch.NewCommitCmd().RunE, // Use new batch commit logic
 	Aliases: []string{"c"},
 }
 
@@ -94,14 +96,14 @@ Examples:
   gman work push --force                # Force push (use carefully)
   gman work push --set-upstream         # Set upstream for new branches
   gman work push --group webdev         # Push specific group only`,
-	RunE:    runBatchPush, // Use existing batch push logic
+	RunE:    batch.NewPushCmd().RunE, // Use new batch push logic
 	Aliases: []string{"p"},
 }
 
 // workPullCmd pulls changes (alias for existing pull command)
 var workPullCmd = &cobra.Command{
 	Use:   "pull",
-	Short: "Pull changes across multiple repositories", 
+	Short: "Pull changes across multiple repositories",
 	Long: `Pull changes from remote repositories.
 
 This is similar to sync but specifically performs git pull operations.
@@ -110,7 +112,7 @@ Useful when you want to explicitly pull without other sync behaviors.
 Examples:
   gman work pull                        # Pull all repositories
   gman work pull --group webdev         # Pull specific group only`,
-	RunE:    runBatchPull, // Use existing batch pull logic
+	RunE:    batch.NewPullCmd().RunE, // Use new batch pull logic
 	Aliases: []string{"pl"},
 }
 
@@ -128,13 +130,13 @@ Examples:
   gman work stash pop                   # Apply and remove latest stash
   gman work stash list                  # List all stashes
   gman work stash clear                 # Clear all stashes`,
-	RunE:    batchStashCmd.RunE, // Use existing batch stash logic
+	RunE:    batch.NewStashCmd().RunE, // Use new batch stash logic
 	Aliases: []string{"st"},
 }
 
 func init() {
 	rootCmd.AddCommand(workCmd)
-	
+
 	// Add subcommands to work group
 	workCmd.AddCommand(workStatusCmd)
 	workCmd.AddCommand(workSyncCmd)
@@ -142,16 +144,16 @@ func init() {
 	workCmd.AddCommand(workPushCmd)
 	workCmd.AddCommand(workPullCmd)
 	workCmd.AddCommand(workStashCmd)
-	
+
 	// Add branch and diff as subcommands (they're already defined)
 	workCmd.AddCommand(branchCmd)
 	workCmd.AddCommand(diffCmd)
-	
+
 	// Copy flags from original commands
 	copyCommandFlags(workStatusCmd, statusCmd)
 	copyCommandFlags(workSyncCmd, syncCmd)
-	copyCommandFlags(workCommitCmd, batchCommitCmd)
-	copyCommandFlags(workPushCmd, batchPushCmd)
-	copyCommandFlags(workPullCmd, batchPullCmd)
-	copyCommandFlags(workStashCmd, batchStashCmd)
+	copyCommandFlags(workCommitCmd, batch.NewCommitCmd())
+	copyCommandFlags(workPushCmd, batch.NewPushCmd())
+	copyCommandFlags(workPullCmd, batch.NewPullCmd())
+	copyCommandFlags(workStashCmd, batch.NewStashCmd())
 }

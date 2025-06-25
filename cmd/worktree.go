@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"gman/internal/di"
+
 	"github.com/spf13/cobra"
-	"gman/internal/config"
-	"gman/internal/git"
 )
 
 var (
@@ -89,7 +89,8 @@ Examples:
 }
 
 func init() {
-	rootCmd.AddCommand(worktreeCmd)
+	// Command is now available via: gman tools worktree
+	// Removed direct rootCmd registration to avoid duplication
 	worktreeCmd.AddCommand(worktreeAddCmd)
 	worktreeCmd.AddCommand(worktreeListCmd)
 	worktreeCmd.AddCommand(worktreeRemoveCmd)
@@ -97,7 +98,7 @@ func init() {
 	// Add flags
 	worktreeAddCmd.Flags().StringVarP(&worktreeBranch, "branch", "b", "", "Branch to checkout in the new worktree (required)")
 	worktreeAddCmd.MarkFlagRequired("branch")
-	
+
 	worktreeRemoveCmd.Flags().BoolVarP(&worktreeForce, "force", "f", false, "Force removal even with uncommitted changes")
 }
 
@@ -106,7 +107,7 @@ func runWorktreeAdd(cmd *cobra.Command, args []string) error {
 	worktreePath := args[1]
 
 	// Load configuration
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	if err := configMgr.Load(); err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
@@ -124,14 +125,14 @@ func runWorktreeAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create git manager and add worktree
-	gitMgr := git.NewManager()
+	gitMgr := di.GitManager()
 	if err := gitMgr.AddWorktree(repoPath, absWorktreePath, worktreeBranch); err != nil {
 		return fmt.Errorf("failed to create worktree: %w", err)
 	}
 
 	fmt.Printf("✅ Created worktree for branch '%s' at: %s\n", worktreeBranch, absWorktreePath)
 	fmt.Printf("💡 You can now switch to it using: gman switch %s\n", filepath.Base(absWorktreePath))
-	
+
 	return nil
 }
 
@@ -139,7 +140,7 @@ func runWorktreeList(cmd *cobra.Command, args []string) error {
 	repoAlias := args[0]
 
 	// Load configuration
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	if err := configMgr.Load(); err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
@@ -151,7 +152,7 @@ func runWorktreeList(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create git manager and list worktrees
-	gitMgr := git.NewManager()
+	gitMgr := di.GitManager()
 	worktrees, err := gitMgr.ListWorktrees(repoPath)
 	if err != nil {
 		return fmt.Errorf("failed to list worktrees: %w", err)
@@ -171,7 +172,7 @@ func runWorktreeList(cmd *cobra.Command, args []string) error {
 		} else if wt.IsDetached {
 			status = "🔄"
 		}
-		
+
 		fmt.Printf("%d. %s %s\n", i+1, status, wt.Path)
 		fmt.Printf("   Branch: %s\n", wt.Branch)
 		if wt.Commit != "" {
@@ -190,7 +191,7 @@ func runWorktreeRemove(cmd *cobra.Command, args []string) error {
 	worktreePath := args[1]
 
 	// Load configuration
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	if err := configMgr.Load(); err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
@@ -208,7 +209,7 @@ func runWorktreeRemove(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create git manager and remove worktree
-	gitMgr := git.NewManager()
+	gitMgr := di.GitManager()
 	if err := gitMgr.RemoveWorktree(repoPath, absWorktreePath, worktreeForce); err != nil {
 		if strings.Contains(err.Error(), "uncommitted changes") && !worktreeForce {
 			return fmt.Errorf("worktree has uncommitted changes. Use --force to remove anyway: %w", err)

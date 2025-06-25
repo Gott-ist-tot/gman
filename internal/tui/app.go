@@ -19,7 +19,7 @@ import (
 
 // App represents the main TUI application
 type App struct {
-	state        *models.AppState
+	state           *models.AppState
 	repositoryPanel *panels.RepositoryPanel
 	statusPanel     *panels.StatusPanel
 	searchPanel     *panels.SearchPanel
@@ -27,14 +27,14 @@ type App struct {
 	actionsPanel    *panels.ActionsPanel
 
 	// UI state
-	ready  bool
+	ready    bool
 	quitting bool
 }
 
 // NewApp creates a new TUI application
 func NewApp(configMgr *config.Manager) *App {
 	state := models.NewAppState(configMgr)
-	
+
 	return &App{
 		state:           state,
 		repositoryPanel: panels.NewRepositoryPanel(state),
@@ -148,16 +148,16 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if !isInputMessage(msg) {
 		_, cmd = a.repositoryPanel.Update(msg)
 		cmds = append(cmds, cmd)
-		
+
 		_, cmd = a.statusPanel.Update(msg)
 		cmds = append(cmds, cmd)
-		
+
 		_, cmd = a.searchPanel.Update(msg)
 		cmds = append(cmds, cmd)
-		
+
 		_, cmd = a.previewPanel.Update(msg)
 		cmds = append(cmds, cmd)
-		
+
 		_, cmd = a.actionsPanel.Update(msg)
 		cmds = append(cmds, cmd)
 	}
@@ -237,10 +237,10 @@ func (a *App) renderDashboard() string {
 	height := a.state.WindowHeight
 
 	// Calculate panel dimensions for 2x3 layout
-	leftWidth := width / 3 - 1
-	middleWidth := width / 3 - 1  
+	leftWidth := width/3 - 1
+	middleWidth := width/3 - 1
 	rightWidth := width - leftWidth - middleWidth - 2
-	topHeight := height / 2 - 2
+	topHeight := height/2 - 2
 	bottomHeight := height - topHeight - 4
 
 	// Render panels
@@ -271,7 +271,7 @@ func (a *App) renderDashboard() string {
 	searchPanel := a.renderPanel(
 		a.searchPanel.View(),
 		"Search (3)",
-		leftWidth + middleWidth + 1,
+		leftWidth+middleWidth+1,
 		bottomHeight,
 		a.state.FocusedPanel == models.SearchPanel,
 	)
@@ -326,7 +326,7 @@ func (a *App) renderPanel(content, title string, width, height int, focused bool
 // renderStatusBar renders the bottom status bar
 func (a *App) renderStatusBar() string {
 	helpText := "? Help • Tab Next Panel • q Quit • r Refresh"
-	
+
 	statusStyle := styles.BodyStyle.
 		Background(styles.ColorBgSecondary).
 		Foreground(styles.ColorTextSecondary).
@@ -421,14 +421,14 @@ func (a *App) launchFzfSearch(mode models.SearchMode, query string) tea.Cmd {
 		// Get search results
 		repos := a.state.Repositories
 		var searchResults []index.SearchResult
-		
+
 		switch mode {
 		case models.SearchFiles:
 			searchResults, err = searcher.SearchFiles("", "", repos)
 		case models.SearchCommits:
 			searchResults, err = searcher.SearchCommits("", "", repos)
 		}
-		
+
 		if err != nil {
 			return models.ErrorMsg{Error: fmt.Errorf("search failed: %w", err)}
 		}
@@ -445,7 +445,7 @@ func (a *App) launchFzfSearch(mode models.SearchMode, query string) tea.Cmd {
 				PreviewData: result.Data,
 			}
 		}
-		
+
 		return models.SearchResultsMsg{
 			Mode:    mode,
 			Query:   query,
@@ -468,9 +468,9 @@ func (a *App) buildFzfCommand(mode models.SearchMode, query string) *exec.Cmd {
 		return exec.Command("echo", fmt.Sprintf("Error creating searcher: %v", err))
 	}
 	defer searcher.Close()
-	
+
 	var cmd *exec.Cmd
-	
+
 	switch mode {
 	case models.SearchFiles:
 		// Get all files from indexed repositories
@@ -481,17 +481,17 @@ func (a *App) buildFzfCommand(mode models.SearchMode, query string) *exec.Cmd {
 		} else {
 			// Create input for fzf
 			input := strings.Join(searcher.FormatFileSearchResults(results), "\n")
-			
+
 			// Build fzf command with file-specific options
 			opts := fzf.DefaultFileOptions()
 			opts.Prompt = "Files> "
 			opts.Header = "Search files across repositories"
 			opts.InitialQuery = query
-			
+
 			cmd = exec.Command("fzf", a.buildFzfArgs(opts)...)
 			cmd.Stdin = strings.NewReader(input)
 		}
-		
+
 	case models.SearchCommits:
 		// Get all commits from indexed repositories
 		repos := a.state.Repositories
@@ -501,29 +501,29 @@ func (a *App) buildFzfCommand(mode models.SearchMode, query string) *exec.Cmd {
 		} else {
 			// Create input for fzf
 			input := strings.Join(searcher.FormatCommitSearchResults(results), "\n")
-			
+
 			// Build fzf command with commit-specific options
 			opts := fzf.DefaultCommitOptions()
 			opts.Prompt = "Commits> "
 			opts.Header = "Search commits across repositories"
 			opts.InitialQuery = query
-			
+
 			cmd = exec.Command("fzf", a.buildFzfArgs(opts)...)
 			cmd.Stdin = strings.NewReader(input)
 		}
 	}
-	
+
 	if cmd == nil {
 		cmd = exec.Command("echo", "No search results")
 	}
-	
+
 	return cmd
 }
 
 // buildFzfArgs converts fzf options to command line arguments
 func (a *App) buildFzfArgs(opts fzf.Options) []string {
 	args := []string{}
-	
+
 	if opts.Prompt != "" {
 		args = append(args, "--prompt", opts.Prompt)
 	}
@@ -542,19 +542,18 @@ func (a *App) buildFzfArgs(opts fzf.Options) []string {
 	if opts.InitialQuery != "" {
 		args = append(args, "--query", opts.InitialQuery)
 	}
-	
+
 	return args
 }
-
 
 // parseFzfResults parses the output from fzf and creates search results
 func (a *App) parseFzfResults(mode models.SearchMode) tea.Msg {
 	// Read from stdout file or use other mechanism to get fzf output
 	// For now, return empty results
 	// TODO: Implement proper result parsing
-	
+
 	results := []models.SearchResultItem{}
-	
+
 	return models.SearchResultsMsg{
 		Mode:    mode,
 		Query:   "", // TODO: Extract query from fzf
@@ -568,7 +567,7 @@ func (a *App) updatePreviewFromSearch(result models.SearchResultItem) tea.Cmd {
 	return func() tea.Msg {
 		var content string
 		var contentType models.PreviewType
-		
+
 		switch result.Type {
 		case "file":
 			// Read file content for preview
@@ -579,14 +578,14 @@ func (a *App) updatePreviewFromSearch(result models.SearchResultItem) tea.Cmd {
 				content = fmt.Sprintf("Error reading file: %v", err)
 			}
 			contentType = models.PreviewFile
-			
+
 		case "commit":
 			// Get commit diff for preview
-			content = fmt.Sprintf("Commit: %s\nRepository: %s\n\n%s", 
+			content = fmt.Sprintf("Commit: %s\nRepository: %s\n\n%s",
 				result.Hash, result.Repository, result.DisplayText)
 			contentType = models.PreviewCommit
 		}
-		
+
 		return models.PreviewContentMsg{
 			Content:     content,
 			ContentType: contentType,
@@ -599,7 +598,7 @@ func (a *App) updatePreviewFromSearch(result models.SearchResultItem) tea.Cmd {
 // Run starts the TUI application
 func Run(configMgr *config.Manager) error {
 	app := NewApp(configMgr)
-	
+
 	// Create the tea program
 	p := tea.NewProgram(
 		app,

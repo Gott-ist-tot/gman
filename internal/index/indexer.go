@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"gman/internal/config"
+	"gman/internal/di"
 	"gman/internal/git"
 )
 
@@ -35,7 +36,7 @@ func NewIndexer(configMgr *config.Manager) (*Indexer, error) {
 
 	return &Indexer{
 		storage:   storage,
-		gitMgr:    git.NewManager(),
+		gitMgr:    di.GitManager(),
 		configMgr: configMgr,
 	}, nil
 }

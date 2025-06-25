@@ -2,10 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	
-	"github.com/spf13/cobra"
-	"gman/internal/config"
+
+	"gman/internal/di"
 	"gman/pkg/types"
+
+	"github.com/spf13/cobra"
 )
 
 // onboardingCmd represents commands for new user experience
@@ -31,10 +32,10 @@ of key gman features and commands.`,
 
 // checkFirstRunCmd checks if this is the first run and offers setup
 var checkFirstRunCmd = &cobra.Command{
-	Use:   "check-first-run",
-	Short: "Check if this is first run and offer setup",
-	Long:  `Internal command to check first run status and offer setup wizard.`,
-	RunE:  runCheckFirstRun,
+	Use:    "check-first-run",
+	Short:  "Check if this is first run and offer setup",
+	Long:   `Internal command to check first run status and offer setup wizard.`,
+	RunE:   runCheckFirstRun,
 	Hidden: true,
 }
 
@@ -49,9 +50,9 @@ func runWelcome(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Println("gman helps you manage multiple Git repositories efficiently.")
 	fmt.Println()
-	
+
 	// Check if user has any repositories configured
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	if err := configMgr.Load(); err == nil {
 		cfg := configMgr.GetConfig()
 		if len(cfg.Repositories) > 0 {
@@ -68,32 +69,32 @@ func runWelcome(cmd *cobra.Command, args []string) error {
 		fmt.Println()
 		showSetupInstructions()
 	}
-	
+
 	fmt.Println("📚 Learn More:")
 	fmt.Println("  gman --help                  # Show all available commands")
 	fmt.Println("  gman <command> --help        # Get help for specific commands")
 	fmt.Println("  gman dashboard               # Launch interactive TUI")
 	fmt.Println()
 	fmt.Println("🔗 Documentation: https://github.com/your-org/gman")
-	
+
 	return nil
 }
 
 func runCheckFirstRun(cmd *cobra.Command, args []string) error {
-	configMgr := config.NewManager()
-	
+	configMgr := di.ConfigManager()
+
 	// Try to load existing config
 	if err := configMgr.Load(); err != nil {
 		// Config doesn't exist - this is likely a first run
 		return offerSetup()
 	}
-	
+
 	cfg := configMgr.GetConfig()
 	if len(cfg.Repositories) == 0 {
 		// Config exists but no repositories - offer setup
 		return offerSetup()
 	}
-	
+
 	// User has repositories configured, just show a brief welcome
 	fmt.Println("Welcome back to gman! Use 'gman --help' for commands.")
 	return nil
@@ -104,24 +105,24 @@ func offerSetup() error {
 	fmt.Println()
 	fmt.Println("It looks like this is your first time using gman.")
 	fmt.Println("Would you like to run the setup wizard to get started? (Y/n)")
-	
+
 	var response string
 	fmt.Scanln(&response)
-	
+
 	if response == "" || response == "y" || response == "Y" || response == "yes" {
 		fmt.Println()
 		fmt.Println("Starting setup wizard...")
 		fmt.Println()
-		
+
 		// Run setup command
 		setupCmd := &cobra.Command{}
 		return runSetup(setupCmd, []string{})
 	}
-	
+
 	fmt.Println()
 	fmt.Println("Setup skipped. You can run 'gman setup' anytime to configure gman.")
 	showManualSetupInstructions()
-	
+
 	return nil
 }
 
@@ -139,7 +140,7 @@ func showQuickCommands(cfg *types.Config) {
 	fmt.Println("  gman status                  # Show repository status")
 	fmt.Println("  gman switch                  # Interactive repository switching")
 	fmt.Println("  gman sync                    # Sync all repositories")
-	
+
 	// Show example with first repository
 	if len(cfg.Repositories) > 0 {
 		var firstAlias string
@@ -149,7 +150,7 @@ func showQuickCommands(cfg *types.Config) {
 		}
 		fmt.Printf("  gman switch %s               # Switch to specific repository\n", firstAlias)
 	}
-	
+
 	fmt.Println()
 }
 
@@ -165,13 +166,13 @@ func showManualSetupInstructions() {
 
 // IsFirstRun checks if this appears to be a first run
 func IsFirstRun() bool {
-	configMgr := config.NewManager()
-	
+	configMgr := di.ConfigManager()
+
 	// Try to load config
 	if err := configMgr.Load(); err != nil {
 		return true // Config doesn't exist
 	}
-	
+
 	cfg := configMgr.GetConfig()
 	return len(cfg.Repositories) == 0 // Config exists but empty
 }

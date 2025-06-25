@@ -74,7 +74,7 @@ func (f *Finder) Find(input []string, opts Options) ([]string, error) {
 
 	// Create fzf command
 	cmd := exec.Command(f.fzfPath, args...)
-	
+
 	// Set up stdin pipe
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -184,7 +184,7 @@ func (f *Finder) buildArgs(opts Options) []string {
 	// Preview options
 	if opts.Preview != "" {
 		args = append(args, "--preview", opts.Preview)
-		
+
 		if opts.PreviewSize != "" {
 			args = append(args, "--preview-window", opts.PreviewSize)
 		}
@@ -196,12 +196,12 @@ func (f *Finder) buildArgs(opts Options) []string {
 	}
 
 	// Additional useful options
-	args = append(args, 
-		"--ansi",           // Support ANSI color codes
-		"--no-sort",        // Don't sort, maintain original order
-		"--exact",          // Exact matching by default
-		"--cycle",          // Enable cycling through results
-		"--info=inline",    // Show info inline
+	args = append(args,
+		"--ansi",        // Support ANSI color codes
+		"--no-sort",     // Don't sort, maintain original order
+		"--exact",       // Exact matching by default
+		"--cycle",       // Enable cycling through results
+		"--info=inline", // Show info inline
 	)
 
 	return args
@@ -255,7 +255,7 @@ func (f *Finder) TestConnection() error {
 	// Run fzf with test input but don't wait for user input
 	// This just tests if fzf can start correctly
 	cmd := exec.Command(f.fzfPath, f.buildArgs(testOpts)...)
-	
+
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return fmt.Errorf("failed to create stdin pipe: %w", err)
@@ -284,7 +284,7 @@ func (f *Finder) TestConnection() error {
 
 	// Wait for the process to finish (or be killed)
 	err = cmd.Wait()
-	
+
 	// If the process was killed, that's expected and means fzf is working
 	if err != nil {
 		if strings.Contains(err.Error(), "killed") || strings.Contains(err.Error(), "signal") {

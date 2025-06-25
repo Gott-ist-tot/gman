@@ -5,10 +5,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
-	"gman/internal/config"
+	"gman/internal/di"
 	"gman/pkg/types"
+
 	"github.com/fatih/color"
+	"github.com/spf13/cobra"
 )
 
 // recentCmd represents the recent command
@@ -28,13 +29,14 @@ Examples:
 var recentLimit int
 
 func init() {
-	rootCmd.AddCommand(recentCmd)
+	// Command is now available via: gman repo recent
+	// Removed direct rootCmd registration to avoid duplication
 	recentCmd.Flags().IntVar(&recentLimit, "limit", 10, "Maximum number of recent repositories to show")
 }
 
 func runRecent(cmd *cobra.Command, args []string) error {
 	// Load configuration
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	if err := configMgr.Load(); err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
@@ -78,7 +80,7 @@ func displayRecentRepositories(entries []types.RecentEntry, repos map[string]str
 
 		// Format relative time
 		timeAgo := formatTimeAgo(entry.AccessTime)
-		
+
 		// Truncate path if too long
 		displayPath := path
 		maxPathLen := 40
@@ -93,7 +95,7 @@ func displayRecentRepositories(entries []types.RecentEntry, repos map[string]str
 			color.BlueString("(%s)", timeAgo))
 	}
 
-	fmt.Printf("\n%s\n", 
+	fmt.Printf("\n%s\n",
 		color.MagentaString("Tip: Use 'gman switch <number>' or 'gman switch <alias>' to switch"))
 }
 

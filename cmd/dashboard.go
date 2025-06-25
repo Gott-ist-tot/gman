@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"gman/internal/config"
+	"gman/internal/di"
 	"gman/internal/tui"
 )
 
@@ -51,7 +51,8 @@ var dashboardFlags struct {
 }
 
 func init() {
-	rootCmd.AddCommand(dashboardCmd)
+	// Command is now available via: gman tools dashboard
+	// Removed direct rootCmd registration to avoid duplication
 
 	// Add flags
 	dashboardCmd.Flags().StringVar(&dashboardFlags.theme, "theme", "dark", "Color theme (dark, light)")
@@ -61,7 +62,7 @@ func init() {
 
 func runDashboard(cmd *cobra.Command, args []string) error {
 	// Initialize configuration manager
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	if err := configMgr.Load(); err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
@@ -112,11 +113,11 @@ type TerminalDiagnostics struct {
 // setupTerminal prepares the terminal for TUI mode
 func setupTerminal(force, debug bool) error {
 	diag := checkTerminalCapabilities()
-	
+
 	if debug {
 		printTerminalDiagnostics(diag)
 	}
-	
+
 	// If force flag is used, skip checks
 	if force {
 		if debug {
@@ -124,7 +125,7 @@ func setupTerminal(force, debug bool) error {
 		}
 		return nil
 	}
-	
+
 	// Enhanced terminal suitability check
 	if !isTerminalSuitable(diag) {
 		return buildTerminalError(diag)
@@ -132,7 +133,7 @@ func setupTerminal(force, debug bool) error {
 
 	// Additional terminal setup could go here
 	// For now, Bubble Tea handles most of the setup
-	
+
 	return nil
 }
 
@@ -148,7 +149,7 @@ func checkTerminalCapabilities() TerminalDiagnostics {
 		DetectedIssues: make([]string, 0),
 		Suggestions:    make([]string, 0),
 	}
-	
+
 	// Check if stdout is a TTY
 	if fileInfo, _ := os.Stdout.Stat(); (fileInfo.Mode() & os.ModeCharDevice) != 0 {
 		diag.StdoutIsTTY = true
@@ -156,7 +157,7 @@ func checkTerminalCapabilities() TerminalDiagnostics {
 		diag.DetectedIssues = append(diag.DetectedIssues, "stdout is not connected to a TTY")
 		diag.Suggestions = append(diag.Suggestions, "try running in a real terminal or use --force flag")
 	}
-	
+
 	// Check TERM environment variable
 	diag.TermEnv = os.Getenv("TERM")
 	if diag.TermEnv == "" {
@@ -168,7 +169,7 @@ func checkTerminalCapabilities() TerminalDiagnostics {
 	} else {
 		diag.TermSupported = true
 	}
-	
+
 	// Try to open /dev/tty as fallback
 	if !diag.StdoutIsTTY {
 		if tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0); err == nil {
@@ -180,7 +181,7 @@ func checkTerminalCapabilities() TerminalDiagnostics {
 			diag.DetectedIssues = append(diag.DetectedIssues, "cannot access terminal device (/dev/tty)")
 		}
 	}
-	
+
 	return diag
 }
 
@@ -190,21 +191,21 @@ func isTerminalSuitable(diag TerminalDiagnostics) bool {
 	if diag.StdoutIsTTY && diag.TermSupported {
 		return true
 	}
-	
+
 	// Fallback: if we can access TTY device and TERM is supported
 	if diag.CanOpenTTY && diag.TermSupported {
 		return true
 	}
-	
+
 	return false
 }
 
 // buildTerminalError creates a detailed error message with suggestions
 func buildTerminalError(diag TerminalDiagnostics) error {
 	var msg strings.Builder
-	
+
 	msg.WriteString("terminal does not support TUI mode\n\n")
-	
+
 	if len(diag.DetectedIssues) > 0 {
 		msg.WriteString("Detected issues:\n")
 		for _, issue := range diag.DetectedIssues {
@@ -212,7 +213,7 @@ func buildTerminalError(diag TerminalDiagnostics) error {
 		}
 		msg.WriteString("\n")
 	}
-	
+
 	if len(diag.Suggestions) > 0 {
 		msg.WriteString("Suggestions:\n")
 		for _, suggestion := range diag.Suggestions {
@@ -220,12 +221,12 @@ func buildTerminalError(diag TerminalDiagnostics) error {
 		}
 		msg.WriteString("\n")
 	}
-	
+
 	msg.WriteString("You can also:\n")
 	msg.WriteString("  • Use --force to bypass these checks\n")
 	msg.WriteString("  • Use --debug to see detailed diagnostic information\n")
 	msg.WriteString("  • Continue using CLI commands: gman status, gman list, etc.\n")
-	
+
 	return fmt.Errorf("%s", msg.String())
 }
 
@@ -238,14 +239,14 @@ func printTerminalDiagnostics(diag TerminalDiagnostics) {
 	if diag.TTYPath != "" {
 		fmt.Printf("  TTY device: %s (accessible: %v)\n", diag.TTYPath, diag.CanOpenTTY)
 	}
-	
+
 	if len(diag.DetectedIssues) > 0 {
 		fmt.Println("  Issues found:")
 		for _, issue := range diag.DetectedIssues {
 			fmt.Printf("    • %s\n", issue)
 		}
 	}
-	
+
 	if len(diag.Suggestions) > 0 {
 		fmt.Println("  Suggestions:")
 		for _, suggestion := range diag.Suggestions {

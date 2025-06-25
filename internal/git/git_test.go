@@ -19,7 +19,7 @@ func TestManager_verifyBranchExists(t *testing.T) {
 
 	// Navigate to the repository root
 	repoRoot := filepath.Join(wd, "..", "..")
-	
+
 	manager := NewManager()
 
 	// Test with a branch that should exist (main or master)
@@ -126,7 +126,7 @@ func TestManager_DiffFileBetweenRepos(t *testing.T) {
 
 func TestManager_parseWorktreeList(t *testing.T) {
 	manager := NewManager()
-	
+
 	// Test with empty output
 	worktrees, err := manager.parseWorktreeList("")
 	if err != nil {
@@ -153,7 +153,7 @@ detached`
 	if err != nil {
 		t.Errorf("Expected no error for valid input, got: %v", err)
 	}
-	
+
 	if len(worktrees) != 3 {
 		t.Errorf("Expected 3 worktrees, got: %d", len(worktrees))
 		return
@@ -238,7 +238,7 @@ func TestManager_DiffFileBetweenBranches_EdgeCases(t *testing.T) {
 		},
 		{
 			name:          "large file diff",
-			branch1:       "main", 
+			branch1:       "main",
 			branch2:       "large-file",
 			filePath:      "large.txt",
 			expectError:   false,
@@ -264,29 +264,29 @@ func TestManager_DiffFileBetweenBranches_EdgeCases(t *testing.T) {
 			description:   "Should show diff when file is deleted in one branch",
 		},
 		{
-			name:        "unicode content diff",
-			branch1:     "main",
-			branch2:     "unicode",
-			filePath:    "unicode.txt",
-			expectError: false,
+			name:          "unicode content diff",
+			branch1:       "main",
+			branch2:       "unicode",
+			filePath:      "unicode.txt",
+			expectError:   false,
 			expectContent: true,
-			description: "Should handle unicode content correctly",
+			description:   "Should handle unicode content correctly",
 		},
 		{
-			name:        "symlink diff",
-			branch1:     "main",
-			branch2:     "symlink-changes",
-			filePath:    "link.txt",
-			expectError: false,
+			name:          "symlink diff",
+			branch1:       "main",
+			branch2:       "symlink-changes",
+			filePath:      "link.txt",
+			expectError:   false,
 			expectContent: false, // Symlinks might not show content diff
-			description: "Should handle symlinks",
+			description:   "Should handle symlinks",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			output, err := manager.DiffFileBetweenBranches(repoPath, tt.branch1, tt.branch2, tt.filePath)
-			
+
 			if tt.expectError {
 				if err == nil {
 					t.Errorf("Expected error but got none for: %s", tt.description)
@@ -297,7 +297,7 @@ func TestManager_DiffFileBetweenBranches_EdgeCases(t *testing.T) {
 					t.Logf("Got error (expected in simplified test): %v", err)
 					return
 				}
-				
+
 				if tt.expectContent && output == "" {
 					t.Logf("Expected content but got empty output for: %s", tt.description)
 				}
@@ -330,7 +330,7 @@ func TestManager_WorktreeConcurrency(t *testing.T) {
 			go func(index int) {
 				wtPath := filepath.Join(tempDir, fmt.Sprintf("concurrent-wt-%d", index))
 				branch := fmt.Sprintf("concurrent-branch-%d", index)
-				
+
 				err := manager.AddWorktree(repoPath, wtPath, branch)
 				results <- err
 			}(i)
@@ -377,9 +377,9 @@ func TestManager_DiffFileBetweenRepos_Performance(t *testing.T) {
 		files    int
 		fileSize int
 	}{
-		{"small-repo", 10, 1024},      // 10 files, 1KB each
-		{"medium-repo", 100, 10240},   // 100 files, 10KB each
-		{"large-repo", 1000, 102400},  // 1000 files, 100KB each
+		{"small-repo", 10, 1024},     // 10 files, 1KB each
+		{"medium-repo", 100, 10240},  // 100 files, 10KB each
+		{"large-repo", 1000, 102400}, // 1000 files, 100KB each
 	}
 
 	manager := NewManager()
@@ -400,7 +400,7 @@ func TestManager_DiffFileBetweenRepos_Performance(t *testing.T) {
 			// Test diff performance on various files
 			for i := 0; i < min(5, tc.files); i++ {
 				filename := fmt.Sprintf("file_%d.txt", i)
-				
+
 				_, err := manager.DiffFileBetweenRepos(repo1Path, repo2Path, filename)
 				if err != nil {
 					t.Errorf("Diff failed for %s in %s: %v", filename, tc.name, err)
@@ -491,7 +491,7 @@ func TestManager_ErrorRecovery(t *testing.T) {
 			}
 
 			err := tt.testFunc()
-			
+
 			if tt.expectError {
 				if err == nil {
 					t.Errorf("Expected error but got none for: %s", tt.description)
@@ -510,7 +510,7 @@ func TestManager_ErrorRecovery(t *testing.T) {
 // initComplexTestRepository creates a repository with multiple branches and file types
 func initComplexTestRepository(t *testing.T, repoPath string) error {
 	t.Helper()
-	
+
 	if err := os.MkdirAll(repoPath, 0755); err != nil {
 		return err
 	}
@@ -527,7 +527,7 @@ func initComplexTestRepository(t *testing.T, repoPath string) error {
 		{"git", "config", "user.name", "Test User"},
 		{"git", "config", "user.email", "test@example.com"},
 	}
-	
+
 	for _, cmdArgs := range cmds {
 		cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
 		cmd.Dir = repoPath
@@ -573,7 +573,7 @@ func initComplexTestRepository(t *testing.T, repoPath string) error {
 // createPerformanceTestRepo creates a repository with specified number and size of files
 func createPerformanceTestRepo(t *testing.T, repoPath string, numFiles, fileSize int) error {
 	t.Helper()
-	
+
 	if err := os.MkdirAll(repoPath, 0755); err != nil {
 		return err
 	}
@@ -590,7 +590,7 @@ func createPerformanceTestRepo(t *testing.T, repoPath string, numFiles, fileSize
 		{"git", "config", "user.name", "Perf Test User"},
 		{"git", "config", "user.email", "perf@example.com"},
 	}
-	
+
 	for _, cmdArgs := range cmds {
 		cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
 		cmd.Dir = repoPath

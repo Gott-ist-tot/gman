@@ -231,7 +231,7 @@ func (g *Manager) getWorkspaceStatus(path string) (types.WorkspaceStatus, error)
 // getSyncStatus gets the sync status with remote
 func (g *Manager) getSyncStatus(path string) (types.SyncStatus, error) {
 	syncStatus := types.SyncStatus{}
-	
+
 	// Attempt to fetch latest from remote
 	_, err := g.RunCommand(path, "fetch", "--quiet")
 	if err != nil {
@@ -313,11 +313,11 @@ func (g *Manager) getFilesChangedCount(path string) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to get files changed count: %w", err)
 	}
-	
+
 	if output == "" {
 		return 0, nil
 	}
-	
+
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	return len(lines), nil
 }
@@ -328,16 +328,16 @@ func (g *Manager) getLastCommitTime(path string) (time.Time, error) {
 	if err != nil {
 		return time.Time{}, fmt.Errorf("failed to get last commit time: %w", err)
 	}
-	
+
 	if output == "" {
 		return time.Time{}, nil
 	}
-	
+
 	timestamp, err := strconv.ParseInt(output, 10, 64)
 	if err != nil {
 		return time.Time{}, fmt.Errorf("failed to parse commit timestamp: %w", err)
 	}
-	
+
 	return time.Unix(timestamp, 0), nil
 }
 
@@ -354,37 +354,37 @@ func (g *Manager) GetBranches(path string, includeRemote bool) ([]string, error)
 	} else {
 		args = []string{"branch"}
 	}
-	
+
 	output, err := g.RunCommand(path, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get branches: %w", err)
 	}
-	
+
 	var branches []string
 	for _, line := range strings.Split(output, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		
+
 		// Remove current branch indicator
 		if strings.HasPrefix(line, "* ") {
 			line = line[2:]
 		}
-		
+
 		// Skip remote HEAD references
 		if strings.Contains(line, "remotes/origin/HEAD") {
 			continue
 		}
-		
+
 		// Clean up remote branch names
 		if strings.HasPrefix(line, "remotes/origin/") {
 			line = strings.TrimPrefix(line, "remotes/origin/")
 		}
-		
+
 		branches = append(branches, line)
 	}
-	
+
 	// Remove duplicates
 	uniqueBranches := make(map[string]bool)
 	var result []string
@@ -394,7 +394,7 @@ func (g *Manager) GetBranches(path string, includeRemote bool) ([]string, error)
 			result = append(result, branch)
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -405,13 +405,13 @@ func (g *Manager) CreateBranch(path, branchName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to check existing branches: %w", err)
 	}
-	
+
 	for _, branch := range branches {
 		if branch == branchName {
 			return fmt.Errorf("branch '%s' already exists", branchName)
 		}
 	}
-	
+
 	// Create the branch
 	return g.runGitCommand(path, "checkout", "-b", branchName)
 }
@@ -423,7 +423,7 @@ func (g *Manager) SwitchBranch(path, branchName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to check existing branches: %w", err)
 	}
-	
+
 	branchExists := false
 	for _, branch := range branches {
 		if branch == branchName {
@@ -431,11 +431,11 @@ func (g *Manager) SwitchBranch(path, branchName string) error {
 			break
 		}
 	}
-	
+
 	if !branchExists {
 		return fmt.Errorf("branch '%s' does not exist", branchName)
 	}
-	
+
 	// Switch to the branch
 	return g.runGitCommand(path, "checkout", branchName)
 }
@@ -450,60 +450,60 @@ func (g *Manager) CleanMergedBranches(path, mainBranch string) ([]string, error)
 			return nil, fmt.Errorf("failed to detect main branch: %w", err)
 		}
 	}
-	
+
 	// Get current branch
 	currentBranch, err := g.getCurrentBranch(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current branch: %w", err)
 	}
-	
+
 	// Get merged branches
 	output, err := g.RunCommand(path, "branch", "--merged", mainBranch)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get merged branches: %w", err)
 	}
-	
+
 	var cleanedBranches []string
 	for _, line := range strings.Split(output, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		
+
 		// Remove current branch indicator
 		if strings.HasPrefix(line, "* ") {
 			line = line[2:]
 		}
-		
+
 		// Don't delete main branch or current branch
 		if line == mainBranch || line == currentBranch {
 			continue
 		}
-		
+
 		// Delete the branch
 		err := g.runGitCommand(path, "branch", "-d", line)
 		if err != nil {
 			// If force delete is needed, try with -D
 			err = g.runGitCommand(path, "branch", "-D", line)
 		}
-		
+
 		if err == nil {
 			cleanedBranches = append(cleanedBranches, line)
 		}
 	}
-	
+
 	return cleanedBranches, nil
 }
 
 // detectMainBranch tries to detect the main branch (main, master, develop)
 func (g *Manager) detectMainBranch(path string) (string, error) {
 	possibleMains := []string{"main", "master", "develop"}
-	
+
 	branches, err := g.GetBranches(path, true)
 	if err != nil {
 		return "", err
 	}
-	
+
 	for _, main := range possibleMains {
 		for _, branch := range branches {
 			if branch == main {
@@ -511,7 +511,7 @@ func (g *Manager) detectMainBranch(path string) (string, error) {
 			}
 		}
 	}
-	
+
 	// Default to current branch if no common main branch found
 	return g.getCurrentBranch(path)
 }
@@ -532,7 +532,7 @@ func (g *Manager) HasUnpushedCommits(path string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("failed to get current branch: %w", err)
 	}
-	
+
 	// Check if remote tracking branch exists
 	remoteRef := fmt.Sprintf("origin/%s", branch)
 	_, err = g.RunCommand(path, "rev-parse", "--verify", remoteRef)
@@ -540,13 +540,13 @@ func (g *Manager) HasUnpushedCommits(path string) (bool, error) {
 		// No remote tracking branch, consider as having unpushed commits
 		return true, nil
 	}
-	
+
 	// Check for commits ahead of remote
 	output, err := g.RunCommand(path, "rev-list", "--count", remoteRef+"..HEAD")
 	if err != nil {
 		return false, fmt.Errorf("failed to check unpushed commits: %w", err)
 	}
-	
+
 	ahead, _ := strconv.Atoi(strings.TrimSpace(output))
 	return ahead > 0, nil
 }
@@ -559,17 +559,17 @@ func (g *Manager) CommitChanges(path, message string, addAll bool) error {
 			return fmt.Errorf("failed to add changes: %w", err)
 		}
 	}
-	
+
 	// Check if there are staged changes
 	output, err := g.RunCommand(path, "diff", "--cached", "--name-only")
 	if err != nil {
 		return fmt.Errorf("failed to check staged changes: %w", err)
 	}
-	
+
 	if strings.TrimSpace(output) == "" {
 		return fmt.Errorf("no staged changes to commit")
 	}
-	
+
 	// Commit changes
 	return g.runGitCommand(path, "commit", "-m", message)
 }
@@ -577,11 +577,11 @@ func (g *Manager) CommitChanges(path, message string, addAll bool) error {
 // PushChanges pushes local commits to remote
 func (g *Manager) PushChanges(path string, force, setUpstream bool) error {
 	args := []string{"push"}
-	
+
 	if force {
 		args = append(args, "--force")
 	}
-	
+
 	if setUpstream {
 		// Get current branch for setting upstream
 		branch, err := g.getCurrentBranch(path)
@@ -590,7 +590,7 @@ func (g *Manager) PushChanges(path string, force, setUpstream bool) error {
 		}
 		args = append(args, "--set-upstream", "origin", branch)
 	}
-	
+
 	return g.runGitCommand(path, args...)
 }
 
@@ -601,16 +601,16 @@ func (g *Manager) StashSave(path, message string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	if !hasChanges {
 		return fmt.Errorf("no changes to stash")
 	}
-	
+
 	args := []string{"stash", "save"}
 	if message != "" {
 		args = append(args, message)
 	}
-	
+
 	return g.runGitCommand(path, args...)
 }
 
@@ -621,11 +621,11 @@ func (g *Manager) StashPop(path string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	if len(stashes) == 0 {
 		return fmt.Errorf("no stashes to pop")
 	}
-	
+
 	return g.runGitCommand(path, "stash", "pop")
 }
 
@@ -635,11 +635,11 @@ func (g *Manager) StashList(path string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list stashes: %w", err)
 	}
-	
+
 	if strings.TrimSpace(output) == "" {
 		return []string{}, nil
 	}
-	
+
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	var stashes []string
 	for _, line := range lines {
@@ -653,7 +653,7 @@ func (g *Manager) StashList(path string) ([]string, error) {
 			}
 		}
 	}
-	
+
 	return stashes, nil
 }
 
@@ -699,7 +699,7 @@ func (g *Manager) DiffFileBetweenRepos(repo1Path, repo2Path, filePath string) (s
 	// Use system diff command to compare files
 	cmd := exec.Command("diff", "-u", file1Path, file2Path)
 	output, err := cmd.CombinedOutput()
-	
+
 	// diff returns non-zero exit code when files differ, which is expected
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -804,7 +804,7 @@ func (g *Manager) parseWorktreeList(output string) ([]types.Worktree, error) {
 
 		parts := strings.SplitN(line, " ", 2)
 		var key, value string
-		
+
 		if len(parts) == 1 {
 			// Single word lines (like "detached", "bare")
 			key = parts[0]

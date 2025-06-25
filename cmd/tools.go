@@ -131,7 +131,7 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(toolsCmd)
-	
+
 	// Add subcommands to tools group
 	toolsCmd.AddCommand(toolsFindCmd)
 	toolsCmd.AddCommand(toolsIndexCmd)
@@ -139,10 +139,10 @@ func init() {
 	toolsCmd.AddCommand(toolsWorktreeCmd)
 	toolsCmd.AddCommand(toolsSetupCmd)
 	toolsCmd.AddCommand(toolsCompletionCmd)
-	
+
 	// Add onboarding as subcommand (for advanced users who want direct access)
 	toolsCmd.AddCommand(onboardingCmd)
-	
+
 	// Copy flags from original commands
 	copyCommandFlags(toolsFindCmd, findCmd)
 	copyCommandFlags(toolsIndexCmd, indexCmd)

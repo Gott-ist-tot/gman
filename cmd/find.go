@@ -6,11 +6,12 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/spf13/cobra"
-	"gman/internal/config"
+	"gman/internal/di"
 	"gman/internal/fzf"
 	"gman/internal/index"
+
 	"github.com/fatih/color"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -77,7 +78,8 @@ Key bindings in fzf:
 }
 
 func init() {
-	rootCmd.AddCommand(findCmd)
+	// Command is now available via: gman tools find
+	// Removed direct rootCmd registration to avoid duplication
 	findCmd.AddCommand(findFileCmd)
 	findCmd.AddCommand(findCommitCmd)
 
@@ -98,7 +100,7 @@ func runFindFile(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load configuration
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	if err := configMgr.Load(); err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
@@ -162,7 +164,7 @@ func runFindFile(cmd *cobra.Command, args []string) error {
 	opts := fzf.DefaultFileOptions()
 	opts.Preview = previewCmd
 	opts.InitialQuery = initialQuery
-	
+
 	// Add header with stats
 	statsInfo := fmt.Sprintf("Found %d files", len(results))
 	if findGroupFilter != "" {
@@ -210,7 +212,7 @@ func runFindCommit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load configuration
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	if err := configMgr.Load(); err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
@@ -274,7 +276,7 @@ func runFindCommit(cmd *cobra.Command, args []string) error {
 	opts := fzf.DefaultCommitOptions()
 	opts.Preview = previewCmd
 	opts.InitialQuery = initialQuery
-	
+
 	// Add header with stats
 	statsInfo := fmt.Sprintf("Found %d commits", len(results))
 	if findGroupFilter != "" {

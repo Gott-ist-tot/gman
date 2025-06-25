@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"gman/internal/config"
+	"gman/internal/di"
 	"gman/pkg/types"
 )
 
@@ -278,8 +279,8 @@ func (m *mockFileInfo) Sys() interface{}   { return nil }
 
 // Helper function to create a test config manager
 func createTestConfigManager(tempDir string) *config.Manager {
-	configMgr := config.NewManager()
-	
+	configMgr := di.ConfigManager()
+
 	// Create a mock config
 	cfg := &types.Config{
 		Repositories: map[string]string{
@@ -291,11 +292,11 @@ func createTestConfigManager(tempDir string) *config.Manager {
 			DefaultSyncMode: "ff-only",
 		},
 	}
-	
+
 	// Note: In a real test, you'd want to set this config properly
 	// This is a simplified version for demonstration
 	_ = cfg
-	
+
 	return configMgr
 }
 
@@ -320,7 +321,7 @@ func BenchmarkFileIndexing(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	
+
 	for i := 0; i < b.N; i++ {
 		err := storage.InsertFiles(files)
 		if err != nil {
@@ -355,7 +356,7 @@ func BenchmarkFileSearch(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	
+
 	for i := 0; i < b.N; i++ {
 		_, err := storage.SearchFiles("file", []string{"test-repo"})
 		if err != nil {

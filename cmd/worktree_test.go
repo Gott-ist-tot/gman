@@ -86,7 +86,7 @@ func TestWorktreeAddCommand(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 			worktreeAddCmd.SetOut(&stdout)
 			worktreeAddCmd.SetErr(&stderr)
-			
+
 			worktreeAddCmd.SetArgs(tt.args)
 			err := worktreeAddCmd.Execute()
 
@@ -145,11 +145,11 @@ func TestWorktreeListCommand(t *testing.T) {
 	}
 
 	tests := []struct {
-		name          string
-		args          []string
-		expectError   bool
-		errorContains string
-		expectOutput  bool
+		name           string
+		args           []string
+		expectError    bool
+		errorContains  string
+		expectOutput   bool
 		outputContains []string
 	}{
 		{
@@ -177,10 +177,10 @@ func TestWorktreeListCommand(t *testing.T) {
 	if err := initEmptyTestRepository(t, emptyRepoPath); err != nil {
 		t.Fatalf("Failed to create empty repo: %v", err)
 	}
-	
+
 	// Update config to include empty repo
 	if err := createTestConfig(t, configPath, map[string]string{
-		"test-repo": repoPath,
+		"test-repo":  repoPath,
 		"empty-repo": emptyRepoPath,
 	}); err != nil {
 		t.Fatalf("Failed to update test config: %v", err)
@@ -196,7 +196,7 @@ func TestWorktreeListCommand(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 			worktreeListCmd.SetOut(&stdout)
 			worktreeListCmd.SetErr(&stderr)
-			
+
 			worktreeListCmd.SetArgs(tt.args)
 			err := worktreeListCmd.Execute()
 
@@ -324,7 +324,7 @@ func TestWorktreeRemoveCommand(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 			worktreeRemoveCmd.SetOut(&stdout)
 			worktreeRemoveCmd.SetErr(&stderr)
-			
+
 			worktreeRemoveCmd.SetArgs(tt.args)
 			err := worktreeRemoveCmd.Execute()
 
@@ -393,10 +393,10 @@ func TestWorktreeComplexScenarios(t *testing.T) {
 			worktreeAddCmd.ResetFlags()
 			worktreeAddCmd.Flags().StringVarP(&worktreeBranch, "branch", "b", "", "Branch to checkout in the new worktree (required)")
 			worktreeAddCmd.MarkFlagRequired("branch")
-			
+
 			args := []string{"test-repo", wt.path, "--branch", wt.branch}
 			worktreeAddCmd.SetArgs(args)
-			
+
 			if err := worktreeAddCmd.Execute(); err != nil {
 				t.Errorf("Failed to create worktree %s: %v", wt.name, err)
 			}
@@ -407,7 +407,7 @@ func TestWorktreeComplexScenarios(t *testing.T) {
 		var stdout bytes.Buffer
 		worktreeListCmd.SetOut(&stdout)
 		worktreeListCmd.SetArgs([]string{"test-repo"})
-		
+
 		if err := worktreeListCmd.Execute(); err != nil {
 			t.Errorf("Failed to list worktrees: %v", err)
 		}
@@ -423,10 +423,10 @@ func TestWorktreeComplexScenarios(t *testing.T) {
 		for _, wt := range worktrees {
 			worktreeRemoveCmd.ResetFlags()
 			worktreeRemoveCmd.Flags().BoolVarP(&worktreeForce, "force", "f", false, "Force removal even with uncommitted changes")
-			
+
 			args := []string{"test-repo", wt.path}
 			worktreeRemoveCmd.SetArgs(args)
-			
+
 			if err := worktreeRemoveCmd.Execute(); err != nil {
 				t.Errorf("Failed to remove worktree %s: %v", wt.name, err)
 			}
@@ -452,11 +452,11 @@ func TestWorktreeComplexScenarios(t *testing.T) {
 		worktreeAddCmd.ResetFlags()
 		worktreeAddCmd.Flags().StringVarP(&worktreeBranch, "branch", "b", "", "Branch to checkout in the new worktree (required)")
 		worktreeAddCmd.MarkFlagRequired("branch")
-		
+
 		wtPath := filepath.Join(tempDir, "existing-branch-wt")
 		args := []string{"test-repo", wtPath, "--branch", "existing-branch"}
 		worktreeAddCmd.SetArgs(args)
-		
+
 		if err := worktreeAddCmd.Execute(); err != nil {
 			t.Errorf("Failed to create worktree with existing branch: %v", err)
 		}
@@ -481,7 +481,7 @@ func TestWorktreeComplexScenarios(t *testing.T) {
 // initWorktreeTestRepository creates a test repository suitable for worktree operations
 func initWorktreeTestRepository(t *testing.T, repoPath string) error {
 	t.Helper()
-	
+
 	if err := os.MkdirAll(repoPath, 0755); err != nil {
 		return err
 	}
@@ -498,7 +498,7 @@ func initWorktreeTestRepository(t *testing.T, repoPath string) error {
 		{"git", "config", "user.name", "Test User"},
 		{"git", "config", "user.email", "test@example.com"},
 	}
-	
+
 	for _, cmdArgs := range cmds {
 		cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
 		cmd.Dir = repoPath
@@ -532,20 +532,20 @@ func initWorktreeTestRepository(t *testing.T, repoPath string) error {
 // createTestWorktree creates a worktree for testing purposes
 func createTestWorktree(t *testing.T, repoPath, wtPath, branchName string) error {
 	t.Helper()
-	
+
 	cmd := exec.Command("git", "worktree", "add", wtPath, "-b", branchName)
 	cmd.Dir = repoPath
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to create test worktree: %w", err)
 	}
-	
+
 	return nil
 }
 
 // initEmptyTestRepository creates an empty test repository with no worktrees
 func initEmptyTestRepository(t *testing.T, repoPath string) error {
 	t.Helper()
-	
+
 	if err := os.MkdirAll(repoPath, 0755); err != nil {
 		return err
 	}
@@ -561,7 +561,7 @@ func initEmptyTestRepository(t *testing.T, repoPath string) error {
 		{"git", "config", "user.name", "Test User"},
 		{"git", "config", "user.email", "test@example.com"},
 	}
-	
+
 	for _, cmdArgs := range cmds {
 		cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
 		cmd.Dir = repoPath

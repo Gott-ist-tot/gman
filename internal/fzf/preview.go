@@ -27,7 +27,7 @@ func (pg *PreviewGenerator) FilePreviewCommand() string {
 		// Use bat with syntax highlighting
 		return "bat --style=numbers --color=always --line-range :100 {2}"
 	}
-	
+
 	// Fallback to cat with head to limit lines
 	return "head -100 {2} 2>/dev/null || echo 'Cannot preview file'"
 }
@@ -57,7 +57,7 @@ func (pg *PreviewGenerator) CustomFilePreview(filePath string) (string, error) {
 
 	// Generate appropriate preview based on file type
 	ext := strings.ToLower(filepath.Ext(filePath))
-	
+
 	switch ext {
 	case ".jpg", ".jpeg", ".png", ".gif", ".bmp":
 		return pg.imagePreview(filePath), nil
@@ -75,7 +75,7 @@ func (pg *PreviewGenerator) textPreview(filePath string) string {
 	if pg.batAvailable {
 		return fmt.Sprintf("bat --style=numbers --color=always --line-range :100 %s", shellEscape(filePath))
 	}
-	
+
 	return fmt.Sprintf("head -100 %s 2>/dev/null || echo 'Cannot preview file'", shellEscape(filePath))
 }
 
@@ -85,11 +85,11 @@ func (pg *PreviewGenerator) imagePreview(filePath string) string {
 	if _, err := exec.LookPath("chafa"); err == nil {
 		return fmt.Sprintf("chafa --size=60x40 %s 2>/dev/null || echo 'Image: %s'", shellEscape(filePath), filepath.Base(filePath))
 	}
-	
+
 	if _, err := exec.LookPath("catimg"); err == nil {
 		return fmt.Sprintf("catimg -w 60 %s 2>/dev/null || echo 'Image: %s'", shellEscape(filePath), filepath.Base(filePath))
 	}
-	
+
 	// Fallback to file info
 	return fmt.Sprintf("file %s 2>/dev/null || echo 'Image: %s'", shellEscape(filePath), filepath.Base(filePath))
 }
@@ -100,7 +100,7 @@ func (pg *PreviewGenerator) pdfPreview(filePath string) string {
 	if _, err := exec.LookPath("pdftotext"); err == nil {
 		return fmt.Sprintf("pdftotext -l 5 -nopgbrk -q %s - 2>/dev/null || echo 'PDF: %s'", shellEscape(filePath), filepath.Base(filePath))
 	}
-	
+
 	// Fallback to file info
 	return fmt.Sprintf("file %s 2>/dev/null || echo 'PDF: %s'", shellEscape(filePath), filepath.Base(filePath))
 }
@@ -108,7 +108,7 @@ func (pg *PreviewGenerator) pdfPreview(filePath string) string {
 // archivePreview generates preview for archive files
 func (pg *PreviewGenerator) archivePreview(filePath string) string {
 	ext := strings.ToLower(filepath.Ext(filePath))
-	
+
 	switch ext {
 	case ".zip":
 		return fmt.Sprintf("unzip -l %s 2>/dev/null | head -20 || echo 'Archive: %s'", shellEscape(filePath), filepath.Base(filePath))
@@ -155,18 +155,18 @@ else
     echo "Invalid format: $line"
 fi
 `
-	
+
 	// Create a temporary script file
 	scriptFile, cleanup, err := CreateTempPreviewScript(script)
 	if err != nil {
 		// Fallback to simple preview
 		return "echo {}"
 	}
-	
+
 	// Note: In a real implementation, you'd need to manage the cleanup
 	// For now, we'll just return the script path
 	_ = cleanup // Avoid unused variable warning
-	
+
 	return scriptFile + " {}"
 }
 
@@ -192,12 +192,12 @@ else
     echo "Invalid format: $line"
 fi
 `
-	
+
 	scriptFile, cleanup, err := CreateTempPreviewScript(script)
 	if err != nil {
 		return "echo {}"
 	}
-	
+
 	_ = cleanup
 	return scriptFile + " {}"
 }
@@ -275,12 +275,12 @@ else
     echo "Invalid format: $line"
 fi
 `, pg.generateRepoMapping(repoMap))
-	
+
 	scriptFile, _, err := CreateTempPreviewScript(script)
 	if err != nil {
 		return "echo 'Preview error'"
 	}
-	
+
 	return scriptFile + " {}"
 }
 
@@ -288,13 +288,13 @@ fi
 func (pg *PreviewGenerator) generateRepoMapping(repoMap map[string]string) string {
 	var cases []string
 	for alias, path := range repoMap {
-		cases = append(cases, fmt.Sprintf("        %s)\n            repo_path=%s\n            ;;", 
+		cases = append(cases, fmt.Sprintf("        %s)\n            repo_path=%s\n            ;;",
 			shellEscape(alias), shellEscape(path)))
 	}
 	return strings.Join(cases, "\n")
 }
 
-// BuildCommitPreviewCommand builds a complete preview command for commit searching  
+// BuildCommitPreviewCommand builds a complete preview command for commit searching
 func (pg *PreviewGenerator) BuildCommitPreviewCommand(repoMap map[string]string) string {
 	script := fmt.Sprintf(`
 #!/bin/bash
@@ -322,12 +322,12 @@ else
     echo "Invalid format: $line"
 fi
 `, pg.generateRepoMapping(repoMap))
-	
+
 	scriptFile, _, err := CreateTempPreviewScript(script)
 	if err != nil {
 		return "echo 'Preview error'"
 	}
-	
+
 	return scriptFile + " {}"
 }
 
@@ -339,12 +339,12 @@ func (pg *PreviewGenerator) CheckPreviewDependencies() map[string]bool {
 		"catimg":    false,
 		"pdftotext": false,
 	}
-	
+
 	for tool := range tools {
 		_, err := exec.LookPath(tool)
 		tools[tool] = err == nil
 	}
-	
+
 	return tools
 }
 

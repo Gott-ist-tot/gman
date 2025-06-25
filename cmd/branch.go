@@ -6,10 +6,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/spf13/cobra"
 	"gman/internal/config"
-	"gman/internal/git"
+	"gman/internal/di"
+
 	"github.com/fatih/color"
+	"github.com/spf13/cobra"
 )
 
 // branchCmd represents the branch command
@@ -67,37 +68,38 @@ This helps keep the branch list clean by removing outdated feature branches.`,
 }
 
 var (
-	branchGroupName   string
-	branchDryRun      bool
-	branchShowRemote  bool
-	branchVerbose     bool
-	branchMainBranch  string
+	branchGroupName  string
+	branchDryRun     bool
+	branchShowRemote bool
+	branchVerbose    bool
+	branchMainBranch string
 )
 
 func init() {
-	rootCmd.AddCommand(branchCmd)
-	
+	// Command is now available via: gman work branch
+	// Removed direct rootCmd registration to avoid duplication
+
 	// Add subcommands
 	branchCmd.AddCommand(branchListCmd)
 	branchCmd.AddCommand(branchCreateCmd)
 	branchCmd.AddCommand(branchSwitchCmd)
 	branchCmd.AddCommand(branchCleanCmd)
-	
+
 	// Add flags for branch operations
 	branchCmd.PersistentFlags().StringVar(&branchGroupName, "group", "", "Operate only on repositories in the specified group")
 	branchCmd.PersistentFlags().BoolVar(&branchDryRun, "dry-run", false, "Show what would be done without executing")
-	
+
 	// Flags for branch list
 	branchListCmd.Flags().BoolVar(&branchShowRemote, "remote", false, "Show remote branches")
 	branchListCmd.Flags().BoolVarP(&branchVerbose, "verbose", "v", false, "Show detailed branch information")
-	
+
 	// Flags for branch clean
 	branchCleanCmd.Flags().StringVar(&branchMainBranch, "main", "", "Specify main branch (default: auto-detect)")
 }
 
 func runBranchList(cmd *cobra.Command, args []string) error {
 	// Load configuration
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	if err := configMgr.Load(); err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
@@ -113,14 +115,14 @@ func runBranchList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	gitMgr := git.NewManager()
-	
+	gitMgr := di.GitManager()
+
 	// Collect branch information
 	type branchInfo struct {
-		alias        string
+		alias         string
 		currentBranch string
-		branches     []string
-		error        error
+		branches      []string
+		error         error
 	}
 
 	resultChan := make(chan branchInfo, len(reposToProcess))
@@ -130,16 +132,16 @@ func runBranchList(cmd *cobra.Command, args []string) error {
 		wg.Add(1)
 		go func(alias, path string) {
 			defer wg.Done()
-			
+
 			info := branchInfo{alias: alias}
-			
+
 			// Get current branch
 			if current, err := gitMgr.GetCurrentBranch(path); err != nil {
 				info.error = err
 			} else {
 				info.currentBranch = current
 			}
-			
+
 			// Get all branches
 			if branches, err := gitMgr.GetBranches(path, branchShowRemote); err != nil {
 				if info.error == nil {
@@ -148,7 +150,7 @@ func runBranchList(cmd *cobra.Command, args []string) error {
 			} else {
 				info.branches = branches
 			}
-			
+
 			resultChan <- info
 		}(alias, path)
 	}
@@ -173,22 +175,22 @@ func runBranchList(cmd *cobra.Command, args []string) error {
 
 	for _, result := range results {
 		if result.error != nil {
-			fmt.Printf("%s %s: %v\n", 
-				color.RedString("❌"), 
-				color.YellowString(result.alias), 
+			fmt.Printf("%s %s: %v\n",
+				color.RedString("❌"),
+				color.YellowString(result.alias),
 				result.error)
 			continue
 		}
 
-		fmt.Printf("%s %s\n", 
-			color.GreenString("📁"), 
+		fmt.Printf("%s %s\n",
+			color.GreenString("📁"),
 			color.YellowString(result.alias))
-		
+
 		if result.currentBranch != "" {
-			fmt.Printf("   Current: %s\n", 
+			fmt.Printf("   Current: %s\n",
 				color.GreenString("* "+result.currentBranch))
 		}
-		
+
 		if branchVerbose && len(result.branches) > 0 {
 			fmt.Printf("   Branches: ")
 			var branchStrs []string
@@ -201,7 +203,7 @@ func runBranchList(cmd *cobra.Command, args []string) error {
 			}
 			fmt.Printf("%s\n", strings.Join(branchStrs, ", "))
 		}
-		
+
 		fmt.Println()
 	}
 
@@ -210,9 +212,9 @@ func runBranchList(cmd *cobra.Command, args []string) error {
 
 func runBranchCreate(cmd *cobra.Command, args []string) error {
 	branchName := args[0]
-	
+
 	// Load configuration
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	if err := configMgr.Load(); err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
@@ -233,7 +235,7 @@ func runBranchCreate(cmd *cobra.Command, args []string) error {
 		if branchGroupName != "" {
 			groupInfo = fmt.Sprintf(" from group '%s'", branchGroupName)
 		}
-		fmt.Printf("DRY RUN: Would create branch '%s' in %d repositories%s:\n\n", 
+		fmt.Printf("DRY RUN: Would create branch '%s' in %d repositories%s:\n\n",
 			branchName, len(reposToProcess), groupInfo)
 		for alias := range reposToProcess {
 			fmt.Printf("  %s\n", alias)
@@ -241,11 +243,11 @@ func runBranchCreate(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	gitMgr := git.NewManager()
-	
+	gitMgr := di.GitManager()
+
 	// Create branches
 	fmt.Printf("Creating branch '%s' in %d repositories...\n\n", branchName, len(reposToProcess))
-	
+
 	type createResult struct {
 		alias string
 		error error
@@ -271,7 +273,7 @@ func runBranchCreate(cmd *cobra.Command, args []string) error {
 	// Display results
 	successCount := 0
 	errorCount := 0
-	
+
 	for result := range resultChan {
 		if result.error != nil {
 			fmt.Printf("❌ %s: %v\n", result.alias, result.error)
@@ -283,7 +285,7 @@ func runBranchCreate(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("\nBranch creation completed: %d successful, %d failed\n", successCount, errorCount)
-	
+
 	if errorCount > 0 {
 		return fmt.Errorf("branch creation failed for %d repositories", errorCount)
 	}
@@ -293,9 +295,9 @@ func runBranchCreate(cmd *cobra.Command, args []string) error {
 
 func runBranchSwitch(cmd *cobra.Command, args []string) error {
 	branchName := args[0]
-	
+
 	// Load configuration
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	if err := configMgr.Load(); err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
@@ -316,7 +318,7 @@ func runBranchSwitch(cmd *cobra.Command, args []string) error {
 		if branchGroupName != "" {
 			groupInfo = fmt.Sprintf(" from group '%s'", branchGroupName)
 		}
-		fmt.Printf("DRY RUN: Would switch to branch '%s' in %d repositories%s:\n\n", 
+		fmt.Printf("DRY RUN: Would switch to branch '%s' in %d repositories%s:\n\n",
 			branchName, len(reposToProcess), groupInfo)
 		for alias := range reposToProcess {
 			fmt.Printf("  %s\n", alias)
@@ -324,11 +326,11 @@ func runBranchSwitch(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	gitMgr := git.NewManager()
-	
+	gitMgr := di.GitManager()
+
 	// Switch branches
 	fmt.Printf("Switching to branch '%s' in %d repositories...\n\n", branchName, len(reposToProcess))
-	
+
 	type switchResult struct {
 		alias string
 		error error
@@ -354,7 +356,7 @@ func runBranchSwitch(cmd *cobra.Command, args []string) error {
 	// Display results
 	successCount := 0
 	errorCount := 0
-	
+
 	for result := range resultChan {
 		if result.error != nil {
 			fmt.Printf("❌ %s: %v\n", result.alias, result.error)
@@ -366,7 +368,7 @@ func runBranchSwitch(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("\nBranch switch completed: %d successful, %d failed\n", successCount, errorCount)
-	
+
 	if errorCount > 0 {
 		return fmt.Errorf("branch switch failed for %d repositories", errorCount)
 	}
@@ -376,7 +378,7 @@ func runBranchSwitch(cmd *cobra.Command, args []string) error {
 
 func runBranchClean(cmd *cobra.Command, args []string) error {
 	// Load configuration
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	if err := configMgr.Load(); err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
@@ -397,7 +399,7 @@ func runBranchClean(cmd *cobra.Command, args []string) error {
 		if branchGroupName != "" {
 			groupInfo = fmt.Sprintf(" from group '%s'", branchGroupName)
 		}
-		fmt.Printf("DRY RUN: Would clean merged branches in %d repositories%s:\n\n", 
+		fmt.Printf("DRY RUN: Would clean merged branches in %d repositories%s:\n\n",
 			len(reposToProcess), groupInfo)
 		for alias := range reposToProcess {
 			fmt.Printf("  %s\n", alias)
@@ -405,15 +407,15 @@ func runBranchClean(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	gitMgr := git.NewManager()
-	
+	gitMgr := di.GitManager()
+
 	// Clean merged branches
 	fmt.Printf("Cleaning merged branches in %d repositories...\n\n", len(reposToProcess))
-	
+
 	type cleanResult struct {
-		alias    string
-		cleaned  []string
-		error    error
+		alias   string
+		cleaned []string
+		error   error
 	}
 
 	resultChan := make(chan cleanResult, len(reposToProcess))
@@ -437,14 +439,14 @@ func runBranchClean(cmd *cobra.Command, args []string) error {
 	successCount := 0
 	errorCount := 0
 	totalCleaned := 0
-	
+
 	for result := range resultChan {
 		if result.error != nil {
 			fmt.Printf("❌ %s: %v\n", result.alias, result.error)
 			errorCount++
 		} else {
 			if len(result.cleaned) > 0 {
-				fmt.Printf("✅ %s: cleaned %d branches (%s)\n", 
+				fmt.Printf("✅ %s: cleaned %d branches (%s)\n",
 					result.alias, len(result.cleaned), strings.Join(result.cleaned, ", "))
 				totalCleaned += len(result.cleaned)
 			} else {
@@ -454,9 +456,9 @@ func runBranchClean(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Printf("\nBranch cleanup completed: %d successful, %d failed, %d branches cleaned\n", 
+	fmt.Printf("\nBranch cleanup completed: %d successful, %d failed, %d branches cleaned\n",
 		successCount, errorCount, totalCleaned)
-	
+
 	if errorCount > 0 {
 		return fmt.Errorf("branch cleanup failed for %d repositories", errorCount)
 	}
@@ -467,10 +469,10 @@ func runBranchClean(cmd *cobra.Command, args []string) error {
 // getRepositoriesToProcess returns the repositories to operate on based on group filter
 func getRepositoriesToProcess(configMgr *config.Manager) (map[string]string, error) {
 	cfg := configMgr.GetConfig()
-	
+
 	if branchGroupName != "" {
 		return configMgr.GetGroupRepositories(branchGroupName)
 	}
-	
+
 	return cfg.Repositories, nil
 }

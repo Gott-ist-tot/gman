@@ -16,7 +16,7 @@ import (
 // ActionsPanel handles interactive operations and command execution
 type ActionsPanel struct {
 	state *models.AppState
-	
+
 	// Action state
 	selectedAction int
 	actions        []Action
@@ -45,7 +45,7 @@ func NewActionsPanel(state *models.AppState) *ActionsPanel {
 		executing:      false,
 		showResult:     false,
 	}
-	
+
 	panel.initializeActions()
 	return panel
 }
@@ -62,9 +62,9 @@ func (a *ActionsPanel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.state.FocusedPanel != models.ActionsPanel {
 			return a, nil
 		}
-		
+
 		return a, a.handleKeyMsg(msg)
-		
+
 	case models.ActionCompleteMsg:
 		a.executing = false
 		a.lastResult = msg.Result
@@ -74,17 +74,17 @@ func (a *ActionsPanel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, tea.Tick(time.Second*3, func(t time.Time) tea.Msg {
 			return models.HideResultMsg{}
 		})
-		
+
 	case models.HideResultMsg:
 		a.showResult = false
 		return a, nil
-		
+
 	case models.RepositorySelectedMsg:
 		// Update available actions when repository changes
 		a.filterActions()
 		return a, nil
 	}
-	
+
 	return a, nil
 }
 
@@ -93,34 +93,34 @@ func (a *ActionsPanel) View() string {
 	if a.state.SelectedRepo == "" {
 		return a.renderNoRepository()
 	}
-	
+
 	var content strings.Builder
-	
+
 	// Panel header
 	header := styles.HeaderStyle.Render("⚡ Actions")
 	content.WriteString(header)
 	content.WriteString("\n\n")
-	
+
 	// Show result if available
 	if a.showResult {
 		content.WriteString(a.renderResult())
 		content.WriteString("\n")
 	}
-	
+
 	// Action categories
 	categories := a.groupActionsByCategory()
-	
+
 	for category, actions := range categories {
 		if len(actions) == 0 {
 			continue
 		}
-		
+
 		// Category header
 		categoryStyle := styles.SubHeaderStyle.Copy().
 			Foreground(lipgloss.Color("6"))
 		content.WriteString(categoryStyle.Render(category))
 		content.WriteString("\n")
-		
+
 		// Actions in category
 		for i, action := range actions {
 			content.WriteString(a.renderAction(action, i))
@@ -128,10 +128,10 @@ func (a *ActionsPanel) View() string {
 		}
 		content.WriteString("\n")
 	}
-	
+
 	// Footer with shortcuts
 	content.WriteString(a.renderFooter())
-	
+
 	return content.String()
 }
 
@@ -140,38 +140,38 @@ func (a *ActionsPanel) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 	if a.executing {
 		return nil // Ignore input while executing
 	}
-	
+
 	switch msg.String() {
 	case "up", "k":
 		if a.selectedAction > 0 {
 			a.selectedAction--
 		}
-		
+
 	case "down", "j":
 		availableActions := a.getAvailableActions()
 		if a.selectedAction < len(availableActions)-1 {
 			a.selectedAction++
 		}
-		
+
 	case "enter":
 		return a.executeSelectedAction()
-		
+
 	case "r":
 		return a.executeQuickAction("refresh")
-		
+
 	case "s":
 		return a.executeQuickAction("sync")
-		
+
 	case "c":
 		return a.executeQuickAction("commit")
-		
+
 	case "p":
 		return a.executeQuickAction("push")
-		
+
 	case "S":
 		return a.executeQuickAction("stash")
 	}
-	
+
 	return nil
 }
 
@@ -200,7 +200,7 @@ func (a *ActionsPanel) initializeActions() {
 			Category:    "Repository",
 			Handler:     a.handleOpenFileManager,
 		},
-		
+
 		// Git Operations
 		{
 			Name:        "Sync Repository",
@@ -241,7 +241,7 @@ func (a *ActionsPanel) initializeActions() {
 			Handler:     a.handleStashPop,
 			Condition:   a.hasStashes,
 		},
-		
+
 		// Branch Operations
 		{
 			Name:        "Switch Branch",
@@ -264,7 +264,7 @@ func (a *ActionsPanel) initializeActions() {
 			Category:    "Branch",
 			Handler:     a.handleMergeBranch,
 		},
-		
+
 		// Advanced Operations
 		{
 			Name:        "Create Worktree",
@@ -293,13 +293,13 @@ func (a *ActionsPanel) initializeActions() {
 // getAvailableActions returns actions that meet their conditions
 func (a *ActionsPanel) getAvailableActions() []Action {
 	var available []Action
-	
+
 	for _, action := range a.actions {
 		if action.Condition == nil || action.Condition(a.state) {
 			available = append(available, action)
 		}
 	}
-	
+
 	return available
 }
 
@@ -313,11 +313,11 @@ func (a *ActionsPanel) filterActions() {
 func (a *ActionsPanel) groupActionsByCategory() map[string][]Action {
 	categories := make(map[string][]Action)
 	available := a.getAvailableActions()
-	
+
 	for _, action := range available {
 		categories[action.Category] = append(categories[action.Category], action)
 	}
-	
+
 	return categories
 }
 
@@ -326,28 +326,28 @@ func (a *ActionsPanel) renderAction(action Action, index int) string {
 	// Calculate global index for selection
 	globalIndex := a.getGlobalIndex(action)
 	isSelected := globalIndex == a.selectedAction
-	
+
 	var style lipgloss.Style
 	if isSelected {
 		style = styles.ListItemSelectedStyle
 	} else {
 		style = styles.ListItemStyle
 	}
-	
+
 	// Build action text
 	shortcut := ""
 	if action.Shortcut != "" {
 		shortcut = fmt.Sprintf("[%s] ", action.Shortcut)
 	}
-	
+
 	text := fmt.Sprintf("%s%s - %s", shortcut, action.Name, action.Description)
-	
+
 	if isSelected {
 		text = "▶ " + text
 	} else {
 		text = "  " + text
 	}
-	
+
 	return style.Render(text)
 }
 
@@ -355,14 +355,14 @@ func (a *ActionsPanel) renderAction(action Action, index int) string {
 func (a *ActionsPanel) getGlobalIndex(targetAction Action) int {
 	index := 0
 	available := a.getAvailableActions()
-	
+
 	for _, action := range available {
 		if action.Name == targetAction.Name {
 			return index
 		}
 		index++
 	}
-	
+
 	return -1
 }
 
@@ -374,14 +374,14 @@ func (a *ActionsPanel) renderResult() string {
 			Margin(0, 0, 1, 0)
 		return errorStyle.Render(fmt.Sprintf("❌ Error: %s", a.lastError.Error()))
 	}
-	
+
 	if a.lastResult != "" {
 		successStyle := styles.StatusCleanStyle.Copy().
 			Padding(0, 1).
 			Margin(0, 0, 1, 0)
 		return successStyle.Render(fmt.Sprintf("✅ %s", a.lastResult))
 	}
-	
+
 	return ""
 }
 
@@ -394,11 +394,11 @@ func (a *ActionsPanel) renderNoRepository() string {
 func (a *ActionsPanel) renderFooter() string {
 	shortcuts := []string{
 		"↑/k: Up",
-		"↓/j: Down", 
+		"↓/j: Down",
 		"Enter: Execute",
 		"Tab: Next Panel",
 	}
-	
+
 	footer := strings.Join(shortcuts, " • ")
 	return styles.MutedStyle.Render(footer)
 }
@@ -409,10 +409,10 @@ func (a *ActionsPanel) executeSelectedAction() tea.Cmd {
 	if a.selectedAction >= len(available) {
 		return nil
 	}
-	
+
 	action := available[a.selectedAction]
 	a.executing = true
-	
+
 	return action.Handler(a.state)
 }
 

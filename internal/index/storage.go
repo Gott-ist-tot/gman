@@ -38,7 +38,7 @@ type CommitEntry struct {
 // NewStorage creates a new storage instance
 func NewStorage(configDir string) (*Storage, error) {
 	dbPath := filepath.Join(configDir, "gman.index.db")
-	
+
 	// Ensure the directory exists
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
 		return nil, fmt.Errorf("failed to create config directory: %w", err)

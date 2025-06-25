@@ -17,7 +17,7 @@ type Searcher struct {
 
 // SearchResult represents a search result
 type SearchResult struct {
-	Type        string      `json:"type"`         // "file" or "commit"
+	Type        string      `json:"type"` // "file" or "commit"
 	RepoAlias   string      `json:"repo_alias"`
 	DisplayText string      `json:"display_text"` // Formatted text for display
 	Path        string      `json:"path"`         // For files

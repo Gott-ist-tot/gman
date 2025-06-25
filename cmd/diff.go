@@ -7,9 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/spf13/cobra"
-	"gman/internal/config"
+	"gman/internal/di"
 	"gman/internal/git"
+
+	"github.com/spf13/cobra"
 )
 
 var diffTool string
@@ -111,10 +112,11 @@ Examples:
 }
 
 func init() {
-	rootCmd.AddCommand(diffCmd)
+	// Command is now available via: gman work diff
+	// Removed direct rootCmd registration to avoid duplication
 	diffCmd.AddCommand(diffFileCmd)
 	diffCmd.AddCommand(diffCrossRepoCmd)
-	
+
 	// Add common flags
 	diffFileCmd.Flags().StringVar(&diffTool, "tool", "", "External diff tool to use (e.g., meld, vimdiff, code)")
 	diffCrossRepoCmd.Flags().StringVar(&diffTool, "tool", "", "External diff tool to use (e.g., meld, vimdiff, code)")
@@ -127,7 +129,7 @@ func runDiffFile(cmd *cobra.Command, args []string) error {
 	filePath := args[4] // After "--"
 
 	// Load configuration
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	if err := configMgr.Load(); err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
@@ -139,8 +141,8 @@ func runDiffFile(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create git manager and perform diff
-	gitMgr := git.NewManager()
-	
+	gitMgr := di.GitManager()
+
 	if diffTool != "" {
 		return runExternalDiffTool(gitMgr, repoPath, branch1, branch2, filePath, diffTool)
 	}
@@ -165,26 +167,26 @@ func runDiffCrossRepo(cmd *cobra.Command, args []string) error {
 	filePath := args[3] // After "--"
 
 	// Load configuration
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	if err := configMgr.Load(); err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
 	cfg := configMgr.GetConfig()
-	
+
 	repo1Path, exists1 := cfg.Repositories[repo1Alias]
 	if !exists1 {
 		return fmt.Errorf("repository '%s' not found", repo1Alias)
 	}
-	
+
 	repo2Path, exists2 := cfg.Repositories[repo2Alias]
 	if !exists2 {
 		return fmt.Errorf("repository '%s' not found", repo2Alias)
 	}
 
 	// Create git manager and perform cross-repo diff
-	gitMgr := git.NewManager()
-	
+	gitMgr := di.GitManager()
+
 	if diffTool != "" {
 		return runExternalCrossRepoDiffTool(gitMgr, repo1Path, repo2Path, filePath, diffTool)
 	}
@@ -292,16 +294,16 @@ func validateDiffTool(tool string) error {
 		"kompare":  true,
 		"emerge":   true,
 		"winmerge": true,
-		"code":     true,  // VS Code
-		"subl":     true,  // Sublime Text
-		"atom":     true,  // Atom
-		"delta":    true,  // Delta (Rust-based diff tool)
-		"difft":    true,  // Difftastic
+		"code":     true, // VS Code
+		"subl":     true, // Sublime Text
+		"atom":     true, // Atom
+		"delta":    true, // Delta (Rust-based diff tool)
+		"difft":    true, // Difftastic
 	}
 
 	// Extract the base command (handle full paths)
 	toolBase := filepath.Base(tool)
-	
+
 	// Remove file extensions on Windows
 	if strings.HasSuffix(toolBase, ".exe") {
 		toolBase = strings.TrimSuffix(toolBase, ".exe")
@@ -309,7 +311,7 @@ func validateDiffTool(tool string) error {
 
 	// Check if the tool is in the whitelist
 	if !allowedTools[toolBase] {
-		return fmt.Errorf("diff tool '%s' is not in the allowed list. Allowed tools: %v", 
+		return fmt.Errorf("diff tool '%s' is not in the allowed list. Allowed tools: %v",
 			tool, getAllowedToolsList(allowedTools))
 	}
 

@@ -63,10 +63,10 @@ func (b *Bar) render() {
 
 	percentage := float64(b.current) / float64(b.total) * 100
 	filled := int(float64(b.width) * float64(b.current) / float64(b.total))
-	
+
 	// Build progress bar
 	bar := strings.Repeat("█", filled) + strings.Repeat("░", b.width-filled)
-	
+
 	// Calculate elapsed and estimated time
 	elapsed := time.Since(b.startTime)
 	var eta string
@@ -197,7 +197,7 @@ func (mb *MultiBar) render() {
 	}
 
 	total := len(mb.operations)
-	
+
 	// Display summary
 	fmt.Printf("Progress: %d/%d complete", completed, total)
 	if failed > 0 {

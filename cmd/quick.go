@@ -30,7 +30,7 @@ var quickStatusCmd = &cobra.Command{
 }
 
 var quickSyncCmd = &cobra.Command{
-	Use:     "sync", 
+	Use:     "sync",
 	Short:   "Quick sync all repositories",
 	RunE:    runSync,
 	Aliases: []string{"s"},
@@ -51,23 +51,23 @@ var quickListCmd = &cobra.Command{
 }
 
 var quickAddCmd = &cobra.Command{
-	Use:   "add <alias> <path>",
-	Short: "Quick add repository",
-	Args:  cobra.ExactArgs(2),
-	RunE:  runAdd,
+	Use:     "add <alias> <path>",
+	Short:   "Quick add repository",
+	Args:    cobra.ExactArgs(2),
+	RunE:    runAdd,
 	Aliases: []string{"a"},
 }
 
 func init() {
 	rootCmd.AddCommand(quickCmd)
-	
+
 	// Add quick commands
 	quickCmd.AddCommand(quickStatusCmd)
 	quickCmd.AddCommand(quickSyncCmd)
 	quickCmd.AddCommand(quickSwitchCmd)
 	quickCmd.AddCommand(quickListCmd)
 	quickCmd.AddCommand(quickAddCmd)
-	
+
 	// Copy flags from original commands
 	copyCommandFlags(quickStatusCmd, statusCmd)
 	copyCommandFlags(quickSyncCmd, syncCmd)

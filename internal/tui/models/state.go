@@ -24,7 +24,7 @@ type AppState struct {
 	WindowWidth  int
 	WindowHeight int
 	ShowHelp     bool
-	
+
 	// Panel states
 	RepositoryListState RepositoryListState
 	StatusState         StatusState
@@ -76,10 +76,10 @@ type RepositoryListState struct {
 
 // StatusState holds state for the status panel
 type StatusState struct {
-	ShowExtended  bool
-	ShowBranches  bool
-	AutoRefresh   bool
-	LastRefresh   time.Time
+	ShowExtended bool
+	ShowBranches bool
+	AutoRefresh  bool
+	LastRefresh  time.Time
 }
 
 // SearchState holds state for the search panel
@@ -156,10 +156,10 @@ const (
 
 // RepoDisplayItem represents a repository item for display
 type RepoDisplayItem struct {
-	Alias       string
-	Path        string
-	Status      *types.RepoStatus
-	IsSelected  bool
+	Alias        string
+	Path         string
+	Status       *types.RepoStatus
+	IsSelected   bool
 	LastAccessed time.Time
 }
 
@@ -178,12 +178,12 @@ func NewAppState(configMgr *config.Manager) *AppState {
 	// Load configuration first
 	configMgr.Load()
 	config := configMgr.GetConfig()
-	
+
 	repos := config.Repositories
 	if repos == nil {
 		repos = make(map[string]string)
 	}
-	
+
 	groups := configMgr.GetGroups()
 
 	return &AppState{
@@ -194,7 +194,7 @@ func NewAppState(configMgr *config.Manager) *AppState {
 		WindowWidth:   80,
 		WindowHeight:  24,
 		ShowHelp:      false,
-		
+
 		RepositoryListState: RepositoryListState{
 			SortBy:       SortByName,
 			VisibleRepos: make([]RepoDisplayItem, 0),
@@ -209,7 +209,7 @@ func NewAppState(configMgr *config.Manager) *AppState {
 		PreviewState: PreviewState{
 			ContentType: PreviewHelp,
 		},
-		
+
 		LastStatusUpdate: time.Now(),
 	}
 }
@@ -217,7 +217,7 @@ func NewAppState(configMgr *config.Manager) *AppState {
 // UpdateRepositoryData updates the repository data in the state
 func (s *AppState) UpdateRepositoryData(alias string, status *types.RepoStatus) {
 	s.SelectedRepoData = status
-	
+
 	// Update the repository in the visible list
 	for i, repo := range s.RepositoryListState.VisibleRepos {
 		if repo.Alias == alias {
@@ -232,13 +232,13 @@ func (s *AppState) GetSelectedRepository() *RepoDisplayItem {
 	if s.SelectedRepo == "" {
 		return nil
 	}
-	
+
 	for _, repo := range s.RepositoryListState.VisibleRepos {
 		if repo.Alias == s.SelectedRepo {
 			return &repo
 		}
 	}
-	
+
 	return nil
 }
 

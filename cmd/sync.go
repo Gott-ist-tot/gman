@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/spf13/cobra"
-	"gman/internal/config"
+	"gman/internal/di"
 	"gman/internal/git"
 	"gman/internal/progress"
 	"gman/pkg/types"
+
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -47,12 +48,13 @@ Conditional sync options:
 }
 
 func init() {
-	rootCmd.AddCommand(syncCmd)
+	// Command is now available via: gman work sync
+	// Removed direct rootCmd registration to avoid duplication
 
 	syncCmd.Flags().StringVar(&syncMode, "mode", "", "Sync mode: ff-only, rebase, autostash")
 	syncCmd.Flags().BoolVar(&syncRebase, "rebase", false, "Use git pull --rebase")
 	syncCmd.Flags().BoolVar(&syncAutostash, "autostash", false, "Use git pull --autostash")
-	
+
 	// Conditional sync options
 	syncCmd.Flags().BoolVar(&onlyDirty, "only-dirty", false, "Sync only repositories with uncommitted changes")
 	syncCmd.Flags().BoolVar(&onlyBehind, "only-behind", false, "Sync only repositories that are behind remote")
@@ -64,7 +66,7 @@ func init() {
 
 func runSync(cmd *cobra.Command, args []string) error {
 	// Load configuration
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	if err := configMgr.Load(); err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
@@ -78,7 +80,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 	// Get repositories to sync (either all or group-specific)
 	var reposToSync map[string]string
 	var err error
-	
+
 	if groupName != "" {
 		reposToSync, err = configMgr.GetGroupRepositories(groupName)
 		if err != nil {
@@ -96,7 +98,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 	mode := determineSyncMode(cfg)
 
 	// Get Git manager for status checking
-	gitMgr := git.NewManager()
+	gitMgr := di.GitManager()
 
 	// Filter repositories based on conditions
 	filteredRepos, err := filterRepositories(reposToSync, gitMgr)
@@ -160,7 +162,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 			}
 
 			err := gitMgr.SyncRepository(path, mode)
-			
+
 			if progressBar != nil {
 				progressBar.CompleteOperation(alias, err)
 			}

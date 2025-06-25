@@ -9,8 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"gman/internal/config"
-	"gman/internal/git"
+	"gman/internal/di"
 	"gman/internal/interactive"
 	"gman/pkg/types"
 )
@@ -39,23 +38,23 @@ func TestFullWorkflow(t *testing.T) {
 
 	// Create and setup configuration
 	configPath := filepath.Join(tempDir, "config.yml")
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	cfg := configMgr.GetConfig()
 	cfg.Repositories = repos
-	
+
 	// Add some groups for testing
 	cfg.Groups = []types.Group{
 		{
-			Name:        "project",
-			Description: "Main project repositories",
+			Name:         "project",
+			Description:  "Main project repositories",
 			Repositories: []string{"project-backend", "project-frontend"},
-			CreatedAt:   time.Now(),
+			CreatedAt:    time.Now(),
 		},
 		{
-			Name:        "all",
-			Description: "All repositories",
+			Name:         "all",
+			Description:  "All repositories",
 			Repositories: []string{"project-backend", "project-frontend", "shared-utils"},
-			CreatedAt:   time.Now(),
+			CreatedAt:    time.Now(),
 		},
 	}
 
@@ -69,7 +68,7 @@ func TestFullWorkflow(t *testing.T) {
 
 	// Test workflow steps
 	t.Run("1. Configuration Loading", func(t *testing.T) {
-		reloadedMgr := config.NewManager()
+		reloadedMgr := di.ConfigManager()
 		reloadedMgr.LoadFromPath(configPath)
 		reloadedCfg := reloadedMgr.GetConfig()
 
@@ -83,7 +82,7 @@ func TestFullWorkflow(t *testing.T) {
 	})
 
 	t.Run("2. Git Operations", func(t *testing.T) {
-		gitMgr := git.NewManager()
+		gitMgr := di.GitManager()
 
 		// Test status checking
 		for alias, path := range repos {
@@ -100,7 +99,7 @@ func TestFullWorkflow(t *testing.T) {
 	})
 
 	t.Run("3. Worktree Operations", func(t *testing.T) {
-		gitMgr := git.NewManager()
+		gitMgr := di.GitManager()
 		backendPath := repos["project-backend"]
 
 		// Create worktrees
@@ -138,7 +137,7 @@ func TestFullWorkflow(t *testing.T) {
 	})
 
 	t.Run("4. Diff Operations", func(t *testing.T) {
-		gitMgr := git.NewManager()
+		gitMgr := di.GitManager()
 		backendPath := repos["project-backend"]
 
 		// Create a feature branch with changes
@@ -172,7 +171,7 @@ func TestFullWorkflow(t *testing.T) {
 		}
 
 		// Test switch target collection
-		configMgr := config.NewManager()
+		configMgr := di.ConfigManager()
 		configMgr.LoadFromPath(configPath)
 
 		// This would normally collect both repos and worktrees
@@ -200,11 +199,11 @@ func TestFullWorkflow(t *testing.T) {
 
 	t.Run("6. Cross-Package Integration", func(t *testing.T) {
 		// Test that git manager and config manager work together
-		configMgr := config.NewManager()
+		configMgr := di.ConfigManager()
 		configMgr.LoadFromPath(configPath)
 		cfg := configMgr.GetConfig()
 
-		gitMgr := git.NewManager()
+		gitMgr := di.GitManager()
 
 		// Test operations across all configured repositories
 		statusResults := make(map[string]*types.RepoStatus)
@@ -256,7 +255,7 @@ func TestConcurrentOperations(t *testing.T) {
 	}
 
 	configPath := filepath.Join(tempDir, "config.yml")
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	cfg := configMgr.GetConfig()
 	cfg.Repositories = repos
 
@@ -265,11 +264,11 @@ func TestConcurrentOperations(t *testing.T) {
 	}
 
 	t.Run("concurrent status checks", func(t *testing.T) {
-		gitMgr := git.NewManager()
-		
+		gitMgr := di.GitManager()
+
 		// Test concurrent status checking
 		statusChan := make(chan error, len(repos))
-		
+
 		for alias, path := range repos {
 			go func(a, p string) {
 				_, err := gitMgr.GetStatus(p)
@@ -291,18 +290,18 @@ func TestConcurrentOperations(t *testing.T) {
 	})
 
 	t.Run("concurrent worktree operations", func(t *testing.T) {
-		gitMgr := git.NewManager()
-		
+		gitMgr := di.GitManager()
+
 		// Test concurrent worktree creation (limited to first 3 repos to avoid conflicts)
 		testRepos := 3
 		wtChan := make(chan error, testRepos)
-		
+
 		for i := 0; i < testRepos; i++ {
 			alias := fmt.Sprintf("repo-%02d", i)
 			repoPath := repos[alias]
 			wtPath := filepath.Join(tempDir, fmt.Sprintf("wt-%02d", i))
 			branch := fmt.Sprintf("concurrent-branch-%02d", i)
-			
+
 			go func(rp, wp, b string) {
 				err := gitMgr.AddWorktree(rp, wp, b)
 				wtChan <- err
@@ -334,11 +333,11 @@ func TestErrorRecovery(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	gitMgr := git.NewManager()
+	gitMgr := di.GitManager()
 
 	t.Run("non-existent repository", func(t *testing.T) {
 		nonExistentPath := filepath.Join(tempDir, "nonexistent")
-		
+
 		_, err := gitMgr.GetStatus(nonExistentPath)
 		if err == nil {
 			t.Error("Expected error for non-existent repository")
@@ -369,7 +368,7 @@ func TestErrorRecovery(t *testing.T) {
 			t.Fatalf("Failed to create invalid config: %v", err)
 		}
 
-		configMgr := config.NewManager()
+		configMgr := di.ConfigManager()
 		err := configMgr.LoadFromPath(invalidConfigPath)
 		if err == nil {
 			t.Error("Expected error for invalid configuration")
@@ -391,10 +390,10 @@ func TestPerformanceCharacteristics(t *testing.T) {
 
 	// Test with varying repository sizes
 	testCases := []struct {
-		name      string
-		numRepos  int
-		numFiles  int
-		fileSize  int
+		name     string
+		numRepos int
+		numFiles int
+		fileSize int
 	}{
 		{"small_scale", 5, 10, 1024},
 		{"medium_scale", 20, 50, 10240},
@@ -404,7 +403,7 @@ func TestPerformanceCharacteristics(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			repos := make(map[string]string)
-			
+
 			// Create repositories with specified characteristics
 			for i := 0; i < tc.numRepos; i++ {
 				alias := fmt.Sprintf("%s-repo-%02d", tc.name, i)
@@ -416,8 +415,8 @@ func TestPerformanceCharacteristics(t *testing.T) {
 				}
 			}
 
-			gitMgr := git.NewManager()
-			
+			gitMgr := di.GitManager()
+
 			// Measure status checking performance
 			start := time.Now()
 			for _, path := range repos {
@@ -427,11 +426,11 @@ func TestPerformanceCharacteristics(t *testing.T) {
 				}
 			}
 			duration := time.Since(start)
-			
+
 			avgPerRepo := duration / time.Duration(tc.numRepos)
-			t.Logf("%s: %d repos processed in %v (avg: %v per repo)", 
+			t.Logf("%s: %d repos processed in %v (avg: %v per repo)",
 				tc.name, tc.numRepos, duration, avgPerRepo)
-			
+
 			// Performance assertion: should not exceed reasonable time limits
 			maxPerRepo := 500 * time.Millisecond
 			if avgPerRepo > maxPerRepo {
@@ -446,7 +445,7 @@ func TestPerformanceCharacteristics(t *testing.T) {
 // initIntegrationTestRepo creates a test repository with realistic content
 func initIntegrationTestRepo(t *testing.T, repoPath, alias string) error {
 	t.Helper()
-	
+
 	if err := os.MkdirAll(repoPath, 0755); err != nil {
 		return err
 	}
@@ -463,7 +462,7 @@ func initIntegrationTestRepo(t *testing.T, repoPath, alias string) error {
 		{"git", "config", "user.name", "Integration Test User"},
 		{"git", "config", "user.email", "integration@test.com"},
 	}
-	
+
 	for _, cmdArgs := range cmds {
 		cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
 		cmd.Dir = repoPath
@@ -474,10 +473,10 @@ func initIntegrationTestRepo(t *testing.T, repoPath, alias string) error {
 
 	// Create realistic project structure
 	files := map[string]string{
-		"README.md": fmt.Sprintf("# %s\n\nThis is the %s repository for integration testing.\n\n## Features\n\n- Feature 1\n- Feature 2\n", alias, alias),
-		"go.mod":    fmt.Sprintf("module %s\n\ngo 1.19\n", alias),
-		"main.go":   fmt.Sprintf("package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"Hello from %s\")\n}\n", alias),
-		"Makefile":  "build:\n\tgo build -o bin/app .\n\ntest:\n\tgo test ./...\n\nclean:\n\trm -rf bin/\n",
+		"README.md":  fmt.Sprintf("# %s\n\nThis is the %s repository for integration testing.\n\n## Features\n\n- Feature 1\n- Feature 2\n", alias, alias),
+		"go.mod":     fmt.Sprintf("module %s\n\ngo 1.19\n", alias),
+		"main.go":    fmt.Sprintf("package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"Hello from %s\")\n}\n", alias),
+		"Makefile":   "build:\n\tgo build -o bin/app .\n\ntest:\n\tgo test ./...\n\nclean:\n\trm -rf bin/\n",
 		".gitignore": "bin/\n*.log\n.env\n",
 	}
 
@@ -495,7 +494,7 @@ func initIntegrationTestRepo(t *testing.T, repoPath, alias string) error {
 		if err := os.MkdirAll(subdirPath, 0755); err != nil {
 			return err
 		}
-		
+
 		// Add a simple file in each subdirectory
 		subFile := filepath.Join(subdirPath, "example.go")
 		content := fmt.Sprintf("package %s\n\n// Example file in %s/%s\n", subdir, alias, subdir)
@@ -563,7 +562,7 @@ func createBranchWithChanges(t *testing.T, repoPath, branchName, newContent stri
 // createPerformanceTestRepo creates a repository with specified file count and sizes
 func createPerformanceTestRepo(t *testing.T, repoPath string, numFiles, fileSize int) error {
 	t.Helper()
-	
+
 	if err := os.MkdirAll(repoPath, 0755); err != nil {
 		return err
 	}
@@ -580,7 +579,7 @@ func createPerformanceTestRepo(t *testing.T, repoPath string, numFiles, fileSize
 		{"git", "config", "user.name", "Perf Test User"},
 		{"git", "config", "user.email", "perf@test.com"},
 	}
-	
+
 	for _, cmdArgs := range cmds {
 		cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
 		cmd.Dir = repoPath

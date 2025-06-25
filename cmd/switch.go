@@ -5,11 +5,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/spf13/cobra"
-	"gman/internal/config"
-	"gman/internal/git"
+	"gman/internal/di"
 	"gman/internal/interactive"
 	"gman/pkg/types"
+
+	"github.com/spf13/cobra"
 )
 
 // switchCmd represents the switch command
@@ -33,7 +33,7 @@ Examples:
 		}
 
 		// Load config and return repository aliases for completion
-		configMgr := config.NewManager()
+		configMgr := di.ConfigManager()
 		if err := configMgr.Load(); err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
@@ -53,7 +53,7 @@ func init() {
 
 func runSwitch(cmd *cobra.Command, args []string) error {
 	// Load configuration
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	if err := configMgr.Load(); err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
@@ -96,7 +96,7 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 	if selectedTarget.Type == "worktree" && selectedTarget.RepoAlias != "" {
 		trackingAlias = selectedTarget.RepoAlias
 	}
-	
+
 	if err := configMgr.TrackRecentUsage(trackingAlias); err != nil {
 		// Don't fail the switch if tracking fails, just log it silently
 		// Could add debug logging here in the future
@@ -126,14 +126,14 @@ func fuzzyMatchRepository(input string, repos map[string]string) (string, error)
 		return matches[0], nil
 	}
 
-	return "", fmt.Errorf("multiple repositories match '%s': %s. Please be more specific", 
+	return "", fmt.Errorf("multiple repositories match '%s': %s. Please be more specific",
 		input, strings.Join(matches, ", "))
 }
 
 // collectSwitchTargets gathers all available switch targets (repositories + worktrees)
 func collectSwitchTargets(repositories map[string]string) ([]types.SwitchTarget, error) {
 	var targets []types.SwitchTarget
-	gitMgr := git.NewManager()
+	gitMgr := di.GitManager()
 
 	// Add all repositories as targets
 	for alias, path := range repositories {
@@ -217,7 +217,7 @@ func findSwitchTarget(input string, targets []types.SwitchTarget) (*types.Switch
 	for _, match := range matches {
 		aliases = append(aliases, match.Alias)
 	}
-	return nil, fmt.Errorf("multiple targets match '%s': %s. Please be more specific", 
+	return nil, fmt.Errorf("multiple targets match '%s': %s. Please be more specific",
 		input, strings.Join(aliases, ", "))
 }
 

@@ -37,8 +37,8 @@ Examples:
   gman repo add frontend /Users/john/projects/my-frontend
   gman repo add api ~/work/backend-api
   gman repo add . myproject  # Add current directory as 'myproject'`,
-	Args:  cobra.ExactArgs(2),
-	RunE:  runAdd, // Reuse existing add command logic
+	Args:    cobra.ExactArgs(2),
+	RunE:    runAdd, // Reuse existing add command logic
 	Aliases: []string{"a"},
 }
 
@@ -92,16 +92,16 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(repoCmd)
-	
+
 	// Add subcommands to repo group
 	repoCmd.AddCommand(repoAddCmd)
 	repoCmd.AddCommand(repoRemoveCmd)
 	repoCmd.AddCommand(repoListCmd)
 	repoCmd.AddCommand(repoRecentCmd)
-	
+
 	// Add the group command as a subcommand (it's already defined)
 	repoCmd.AddCommand(groupCmd)
-	
+
 	// Copy flags from original commands
 	copyCommandFlags(repoListCmd, listCmd)
 	copyCommandFlags(repoRecentCmd, recentCmd)

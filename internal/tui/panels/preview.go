@@ -12,9 +12,9 @@ import (
 
 // PreviewPanel displays preview content for selected items
 type PreviewPanel struct {
-	state      *models.AppState
-	scrollPos  int
-	maxScroll  int
+	state     *models.AppState
+	scrollPos int
+	maxScroll int
 }
 
 // NewPreviewPanel creates a new preview panel
@@ -37,7 +37,7 @@ func (p *PreviewPanel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if p.state.FocusedPanel != models.PreviewPanel {
 			return p, nil
 		}
-		
+
 		return p, p.handleKeyMsg(msg)
 
 	case models.PreviewContentMsg:
@@ -193,9 +193,9 @@ func (p *PreviewPanel) renderStatusPreview() string {
 
 	if repo.Status != nil {
 		info = append(info,
-			"Branch: " + repo.Status.Branch,
-			"Status: " + repo.Status.Workspace.String(),
-			"Sync: " + repo.Status.SyncStatus.String(),
+			"Branch: "+repo.Status.Branch,
+			"Status: "+repo.Status.Workspace.String(),
+			"Sync: "+repo.Status.SyncStatus.String(),
 		)
 
 		if repo.Status.FilesChanged > 0 {
@@ -270,14 +270,14 @@ func (p *PreviewPanel) renderDefaultPreview() string {
 func (p *PreviewPanel) getVisibleLines(lines []string) []string {
 	// Calculate visible area (assuming ~15 lines visible)
 	visibleHeight := 15
-	
+
 	start := p.scrollPos
 	end := min(len(lines), start+visibleHeight)
-	
+
 	if start >= len(lines) {
 		return []string{}
 	}
-	
+
 	return lines[start:end]
 }
 
@@ -287,12 +287,12 @@ func (p *PreviewPanel) updateScrollBounds() {
 		p.maxScroll = 0
 		return
 	}
-	
+
 	lines := strings.Split(p.state.PreviewState.Content, "\n")
 	visibleHeight := 15
-	
+
 	p.maxScroll = max(0, len(lines)-visibleHeight)
-	
+
 	// Adjust current scroll if needed
 	if p.scrollPos > p.maxScroll {
 		p.scrollPos = p.maxScroll
@@ -304,10 +304,10 @@ func (p *PreviewPanel) renderScrollIndicator() string {
 	if p.maxScroll == 0 {
 		return ""
 	}
-	
+
 	percentage := int((float64(p.scrollPos) / float64(p.maxScroll)) * 100)
 	indicator := fmt.Sprintf("Scroll: %d%% (%d/%d)", percentage, p.scrollPos, p.maxScroll)
-	
+
 	return styles.MutedStyle.Render(indicator)
 }
 

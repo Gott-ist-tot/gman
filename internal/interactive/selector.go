@@ -7,8 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/fatih/color"
 	"gman/pkg/types"
+
+	"github.com/fatih/color"
 )
 
 // RepositorySelector provides interactive repository selection
@@ -53,7 +54,7 @@ func (rs *RepositorySelector) SelectRepository() (string, error) {
 		if len(displayPath) > 50 {
 			displayPath = "..." + displayPath[len(displayPath)-47:]
 		}
-		fmt.Printf("%s %s %s\n", 
+		fmt.Printf("%s %s %s\n",
 			color.YellowString("[%d]", i+1),
 			color.GreenString("%-15s", alias),
 			color.WhiteString("→ %s", displayPath))
@@ -133,12 +134,12 @@ func (sts *SwitchTargetSelector) SelectTarget() (*types.SwitchTarget, error) {
 	// Sort targets: repositories first, then worktrees, alphabetically within each group
 	sortedTargets := make([]types.SwitchTarget, len(sts.targets))
 	copy(sortedTargets, sts.targets)
-	
+
 	// Simple sort: repositories first, then by alias
 	for i := 0; i < len(sortedTargets)-1; i++ {
 		for j := i + 1; j < len(sortedTargets); j++ {
 			shouldSwap := false
-			
+
 			// Repositories before worktrees
 			if sortedTargets[i].Type == "worktree" && sortedTargets[j].Type == "repository" {
 				shouldSwap = true
@@ -148,7 +149,7 @@ func (sts *SwitchTargetSelector) SelectTarget() (*types.SwitchTarget, error) {
 					shouldSwap = true
 				}
 			}
-			
+
 			if shouldSwap {
 				sortedTargets[i], sortedTargets[j] = sortedTargets[j], sortedTargets[i]
 			}
@@ -162,7 +163,7 @@ func (sts *SwitchTargetSelector) SelectTarget() (*types.SwitchTarget, error) {
 	for i, target := range sortedTargets {
 		var icon, typeLabel string
 		displayPath := target.Path
-		
+
 		// Customize display based on type
 		if target.Type == "repository" {
 			icon = "📁"
@@ -175,13 +176,13 @@ func (sts *SwitchTargetSelector) SelectTarget() (*types.SwitchTarget, error) {
 				typeLabel += color.WhiteString(" (%s)", target.Branch)
 			}
 		}
-		
+
 		// Truncate path if too long
 		if len(displayPath) > 40 {
 			displayPath = "..." + displayPath[len(displayPath)-37:]
 		}
-		
-		fmt.Printf("%s %s %s %-20s %s %s\n", 
+
+		fmt.Printf("%s %s %s %-20s %s %s\n",
 			color.YellowString("[%d]", i+1),
 			icon,
 			typeLabel,

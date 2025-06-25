@@ -10,8 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	"gman/internal/di"
+
 	"github.com/spf13/cobra"
-	"gman/internal/config"
 )
 
 // TestDiffFileCommand tests the diff file command with various scenarios
@@ -43,9 +44,9 @@ func TestDiffFileCommand(t *testing.T) {
 		expectOutput  bool
 	}{
 		{
-			name:        "valid diff between branches",
-			args:        []string{"test-repo", "main", "feature", "--", "test.txt"},
-			expectError: false,
+			name:         "valid diff between branches",
+			args:         []string{"test-repo", "main", "feature", "--", "test.txt"},
+			expectError:  false,
 			expectOutput: true,
 		},
 		{
@@ -73,9 +74,9 @@ func TestDiffFileCommand(t *testing.T) {
 			errorContains: "does not exist",
 		},
 		{
-			name:        "same branch comparison",
-			args:        []string{"test-repo", "main", "main", "--", "test.txt"},
-			expectError: false,
+			name:         "same branch comparison",
+			args:         []string{"test-repo", "main", "main", "--", "test.txt"},
+			expectError:  false,
 			expectOutput: false, // No differences expected
 		},
 	}
@@ -89,12 +90,12 @@ func TestDiffFileCommand(t *testing.T) {
 			// Create a new command instance
 			cmd := &cobra.Command{}
 			diffFileCmd.ResetFlags()
-			
+
 			// Capture output
 			var stdout, stderr bytes.Buffer
 			cmd.SetOut(&stdout)
 			cmd.SetErr(&stderr)
-			
+
 			// Execute the command
 			diffFileCmd.SetArgs(tt.args)
 			err := diffFileCmd.ExecuteContext(cmd.Context())
@@ -109,7 +110,7 @@ func TestDiffFileCommand(t *testing.T) {
 				if err != nil {
 					t.Errorf("Unexpected error: %v", err)
 				}
-				
+
 				output := stdout.String()
 				if tt.expectOutput && output == "" {
 					t.Error("Expected output but got none")
@@ -130,7 +131,7 @@ func TestDiffCrossRepoCommand(t *testing.T) {
 	// Create two test repositories
 	repo1Path := filepath.Join(tempDir, "repo1")
 	repo2Path := filepath.Join(tempDir, "repo2")
-	
+
 	if err := initTestRepository(t, repo1Path); err != nil {
 		t.Fatalf("Failed to initialize repo1: %v", err)
 	}
@@ -177,9 +178,9 @@ func TestDiffCrossRepoCommand(t *testing.T) {
 			errorContains: "does not exist",
 		},
 		{
-			name:        "same repository comparison",
-			args:        []string{"repo1", "repo1", "--", "test.txt"},
-			expectError: false,
+			name:         "same repository comparison",
+			args:         []string{"repo1", "repo1", "--", "test.txt"},
+			expectError:  false,
 			expectOutput: false, // No differences expected
 		},
 	}
@@ -191,11 +192,11 @@ func TestDiffCrossRepoCommand(t *testing.T) {
 
 			cmd := &cobra.Command{}
 			diffCrossRepoCmd.ResetFlags()
-			
+
 			var stdout, stderr bytes.Buffer
 			cmd.SetOut(&stdout)
 			cmd.SetErr(&stderr)
-			
+
 			diffCrossRepoCmd.SetArgs(tt.args)
 			err := diffCrossRepoCmd.ExecuteContext(cmd.Context())
 
@@ -209,7 +210,7 @@ func TestDiffCrossRepoCommand(t *testing.T) {
 				if err != nil {
 					t.Errorf("Unexpected error: %v", err)
 				}
-				
+
 				output := stdout.String()
 				if tt.expectOutput && output == "" {
 					t.Error("Expected output but got none")
@@ -253,14 +254,14 @@ func TestExternalDiffTool(t *testing.T) {
 
 		cmd := &cobra.Command{}
 		diffFileCmd.ResetFlags()
-		
+
 		var stdout, stderr bytes.Buffer
 		cmd.SetOut(&stdout)
 		cmd.SetErr(&stderr)
-		
+
 		args := []string{"test-repo", "main", "feature", "--tool", "diff", "--", "test.txt"}
 		diffFileCmd.SetArgs(args)
-		
+
 		// The command might succeed or fail depending on whether the external tool works
 		// We're mainly testing that the external tool path is executed without panicking
 		_ = diffFileCmd.ExecuteContext(cmd.Context())
@@ -330,7 +331,7 @@ func TestDiffArgValidation(t *testing.T) {
 			// Test argument validation function directly
 			if tt.command.Args != nil {
 				err := tt.command.Args(tt.command, tt.args)
-				
+
 				if tt.expectError {
 					if err == nil {
 						t.Errorf("Expected error but got none")
@@ -352,7 +353,7 @@ func TestDiffArgValidation(t *testing.T) {
 // initTestRepository creates a test Git repository with sample content
 func initTestRepository(t *testing.T, repoPath string) error {
 	t.Helper()
-	
+
 	if err := os.MkdirAll(repoPath, 0755); err != nil {
 		return err
 	}
@@ -369,7 +370,7 @@ func initTestRepository(t *testing.T, repoPath string) error {
 		{"git", "config", "user.name", "Test User"},
 		{"git", "config", "user.email", "test@example.com"},
 	}
-	
+
 	for _, cmdArgs := range cmds {
 		cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
 		cmd.Dir = repoPath
@@ -423,7 +424,7 @@ func initTestRepository(t *testing.T, repoPath string) error {
 // createFileInRepo creates a file with specific content in a repository
 func createFileInRepo(t *testing.T, repoPath, filename, content string) error {
 	t.Helper()
-	
+
 	filePath := filepath.Join(repoPath, filename)
 	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
 		return err
@@ -449,11 +450,11 @@ func createFileInRepo(t *testing.T, repoPath, filename, content string) error {
 // createTestConfig creates a temporary configuration file for testing
 func createTestConfig(t *testing.T, configPath string, repositories map[string]string) error {
 	t.Helper()
-	
-	configMgr := config.NewManager()
+
+	configMgr := di.ConfigManager()
 	cfg := configMgr.GetConfig()
 	cfg.Repositories = repositories
-	
+
 	// Set the config path and save
 	os.Setenv("GMAN_CONFIG", configPath)
 	return configMgr.Save()
@@ -462,30 +463,30 @@ func createTestConfig(t *testing.T, configPath string, repositories map[string]s
 // captureOutput captures stdout/stderr from a function execution
 func captureOutput(t *testing.T, fn func()) (stdout, stderr string) {
 	t.Helper()
-	
+
 	oldStdout := os.Stdout
 	oldStderr := os.Stderr
-	
+
 	rOut, wOut, _ := os.Pipe()
 	rErr, wErr, _ := os.Pipe()
-	
+
 	os.Stdout = wOut
 	os.Stderr = wErr
-	
+
 	go func() {
 		defer wOut.Close()
 		defer wErr.Close()
 		fn()
 	}()
-	
+
 	wOut.Close()
 	wErr.Close()
-	
+
 	outBytes, _ := io.ReadAll(rOut)
 	errBytes, _ := io.ReadAll(rErr)
-	
+
 	os.Stdout = oldStdout
 	os.Stderr = oldStderr
-	
+
 	return string(outBytes), string(errBytes)
 }

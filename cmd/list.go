@@ -3,9 +3,10 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/spf13/cobra"
-	"gman/internal/config"
+	"gman/internal/di"
 	"gman/internal/display"
+
+	"github.com/spf13/cobra"
 )
 
 // listCmd represents the list command
@@ -19,12 +20,13 @@ This shows the mapping between repository aliases and their local filesystem pat
 }
 
 func init() {
-	rootCmd.AddCommand(listCmd)
+	// Command is now available via: gman repo list
+	// Removed direct rootCmd registration to avoid duplication
 }
 
 func runList(cmd *cobra.Command, args []string) error {
 	// Load configuration
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	if err := configMgr.Load(); err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}

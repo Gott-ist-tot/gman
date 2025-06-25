@@ -3,8 +3,9 @@ package models
 import (
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"gman/pkg/types"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // WindowSizeMsg is sent when the terminal window is resized

@@ -3,9 +3,10 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/spf13/cobra"
-	"gman/internal/config"
+	"gman/internal/di"
 	"gman/internal/display"
+
+	"github.com/spf13/cobra"
 )
 
 // removeCmd represents the remove command
@@ -24,7 +25,7 @@ The actual repository files on disk are not affected.`,
 		}
 
 		// Load config and return repository aliases for completion
-		configMgr := config.NewManager()
+		configMgr := di.ConfigManager()
 		if err := configMgr.Load(); err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
@@ -39,14 +40,15 @@ The actual repository files on disk are not affected.`,
 }
 
 func init() {
-	rootCmd.AddCommand(removeCmd)
+	// Command is now available via: gman repo remove
+	// Removed direct rootCmd registration to avoid duplication
 }
 
 func runRemove(cmd *cobra.Command, args []string) error {
 	alias := args[0]
 
 	// Load configuration
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	if err := configMgr.Load(); err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"gman/internal/git"
+	"gman/internal/di"
 )
 
 // TestSwitchCommand tests the switch command with various scenarios
@@ -42,9 +42,9 @@ func TestSwitchCommand(t *testing.T) {
 		outputCheck   func(output string) bool
 	}{
 		{
-			name:        "switch to existing repository",
-			args:        []string{"test-repo"},
-			expectError: false,
+			name:         "switch to existing repository",
+			args:         []string{"test-repo"},
+			expectError:  false,
 			expectOutput: true,
 			outputCheck: func(output string) bool {
 				return strings.Contains(output, "GMAN_CD:")
@@ -57,18 +57,18 @@ func TestSwitchCommand(t *testing.T) {
 			errorContains: "repository 'nonexistent' not found",
 		},
 		{
-			name:        "switch with fuzzy matching",
-			args:        []string{"test"},
-			expectError: false,
+			name:         "switch with fuzzy matching",
+			args:         []string{"test"},
+			expectError:  false,
 			expectOutput: true,
 			outputCheck: func(output string) bool {
 				return strings.Contains(output, "GMAN_CD:") && strings.Contains(output, repoPath)
 			},
 		},
 		{
-			name:        "list all targets (no args)",
-			args:        []string{},
-			expectError: false,
+			name:         "list all targets (no args)",
+			args:         []string{},
+			expectError:  false,
 			expectOutput: true,
 			outputCheck: func(output string) bool {
 				// When no args, should show interactive menu
@@ -85,7 +85,7 @@ func TestSwitchCommand(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 			switchCmd.SetOut(&stdout)
 			switchCmd.SetErr(&stderr)
-			
+
 			switchCmd.SetArgs(tt.args)
 			err := switchCmd.Execute()
 
@@ -99,7 +99,7 @@ func TestSwitchCommand(t *testing.T) {
 				if err != nil {
 					t.Errorf("Unexpected error: %v", err)
 				}
-				
+
 				if tt.expectOutput {
 					output := stdout.String()
 					if output == "" {
@@ -135,7 +135,7 @@ func TestSwitchWithWorktrees(t *testing.T) {
 		{filepath.Join(tempDir, "hotfix-wt"), "hotfix-branch"},
 	}
 
-	gitManager := git.NewManager()
+	gitManager := di.GitManager()
 	for _, wt := range worktrees {
 		if err := gitManager.AddWorktree(repoPath, wt.path, wt.branch); err != nil {
 			t.Fatalf("Failed to create worktree %s: %v", wt.path, err)
@@ -156,7 +156,7 @@ func TestSwitchWithWorktrees(t *testing.T) {
 		var stdout, stderr bytes.Buffer
 		switchCmd.SetOut(&stdout)
 		switchCmd.SetErr(&stderr)
-		
+
 		// Use the worktree path as argument
 		args := []string{filepath.Join(tempDir, "feature-wt")}
 		switchCmd.SetArgs(args)
@@ -182,7 +182,7 @@ func TestSwitchWithWorktrees(t *testing.T) {
 		var stdout, stderr bytes.Buffer
 		switchCmd.SetOut(&stdout)
 		switchCmd.SetErr(&stderr)
-		
+
 		// Use fuzzy matching for worktree
 		args := []string{"hotfix"}
 		switchCmd.SetArgs(args)
@@ -214,7 +214,7 @@ func TestSwitchWithWorktrees(t *testing.T) {
 		var stdout, stderr bytes.Buffer
 		switchCmd.SetOut(&stdout)
 		switchCmd.SetErr(&stderr)
-		
+
 		// This should now be ambiguous
 		args := []string{"feature"}
 		switchCmd.SetArgs(args)
@@ -250,7 +250,7 @@ func TestSwitchTargetCollection(t *testing.T) {
 	}
 
 	// Create worktrees
-	gitManager := git.NewManager()
+	gitManager := di.GitManager()
 	worktreeInfo := []struct {
 		repoPath string
 		wtPath   string
@@ -280,24 +280,24 @@ func TestSwitchTargetCollection(t *testing.T) {
 		var stdout, stderr bytes.Buffer
 		switchCmd.SetOut(&stdout)
 		switchCmd.SetErr(&stderr)
-		
+
 		// No args should trigger interactive mode showing all targets
 		switchCmd.SetArgs([]string{})
 		_ = switchCmd.Execute() // Ignore error as it may fail without input
 
 		// The command should show the interactive menu (might fail due to no input, but we check output)
 		output := stdout.String()
-		
+
 		// Should show repositories
 		if !strings.Contains(output, "repo1") || !strings.Contains(output, "repo2") {
 			t.Error("Expected repositories in target list")
 		}
-		
+
 		// Should show worktrees (based on directory names)
 		if !strings.Contains(output, "repo1-feature") || !strings.Contains(output, "repo2-feature") {
 			t.Error("Expected worktrees in target list")
 		}
-		
+
 		// Should show type indicators
 		if !strings.Contains(output, "repo") || !strings.Contains(output, "worktree") {
 			t.Error("Expected type indicators in target list")
@@ -314,10 +314,10 @@ func TestSwitchFuzzyMatching(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	repos := map[string]string{
-		"backend-api":      filepath.Join(tempDir, "backend-api"),
-		"backend-worker":   filepath.Join(tempDir, "backend-worker"),
-		"frontend-web":     filepath.Join(tempDir, "frontend-web"),
-		"frontend-mobile":  filepath.Join(tempDir, "frontend-mobile"),
+		"backend-api":     filepath.Join(tempDir, "backend-api"),
+		"backend-worker":  filepath.Join(tempDir, "backend-worker"),
+		"frontend-web":    filepath.Join(tempDir, "frontend-web"),
+		"frontend-mobile": filepath.Join(tempDir, "frontend-mobile"),
 	}
 
 	for alias, path := range repos {
@@ -363,9 +363,9 @@ func TestSwitchFuzzyMatching(t *testing.T) {
 			errorContains: "not found",
 		},
 		{
-			name:          "empty input",
-			input:         "",
-			expectError:   false, // Should trigger interactive mode
+			name:        "empty input",
+			input:       "",
+			expectError: false, // Should trigger interactive mode
 		},
 	}
 
@@ -377,12 +377,12 @@ func TestSwitchFuzzyMatching(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 			switchCmd.SetOut(&stdout)
 			switchCmd.SetErr(&stderr)
-			
+
 			var args []string
 			if tt.input != "" {
 				args = []string{tt.input}
 			}
-			
+
 			switchCmd.SetArgs(args)
 			err := switchCmd.Execute()
 
@@ -396,7 +396,7 @@ func TestSwitchFuzzyMatching(t *testing.T) {
 				if err != nil && tt.input != "" {
 					t.Errorf("Unexpected error: %v", err)
 				}
-				
+
 				if tt.shouldMatch != "" {
 					output := stdout.String()
 					if !strings.Contains(output, tt.shouldMatch) {
@@ -427,7 +427,7 @@ func TestSwitchPerformance(t *testing.T) {
 		alias := fmt.Sprintf("repo-%03d", i)
 		path := filepath.Join(tempDir, alias)
 		repos[alias] = path
-		
+
 		if err := initSwitchTestRepository(t, path); err != nil {
 			t.Fatalf("Failed to initialize %s: %v", alias, err)
 		}
@@ -445,16 +445,16 @@ func TestSwitchPerformance(t *testing.T) {
 		var stdout, stderr bytes.Buffer
 		switchCmd.SetOut(&stdout)
 		switchCmd.SetErr(&stderr)
-		
+
 		// Test specific match
 		args := []string{"repo-050"}
 		switchCmd.SetArgs(args)
-		
+
 		err := switchCmd.Execute()
 		if err != nil {
 			t.Errorf("Performance test failed: %v", err)
 		}
-		
+
 		output := stdout.String()
 		if !strings.Contains(output, "repo-050") {
 			t.Error("Performance test should find specific repository")
@@ -471,11 +471,11 @@ func TestSwitchErrorHandling(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	tests := []struct {
-		name           string
-		setupConfig    bool
-		configContent  map[string]string
-		args           []string
-		expectedError  string
+		name          string
+		setupConfig   bool
+		configContent map[string]string
+		args          []string
+		expectedError string
 	}{
 		{
 			name:          "no config file",
@@ -502,7 +502,7 @@ func TestSwitchErrorHandling(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			configPath := filepath.Join(tempDir, fmt.Sprintf("config-%s.yml", tt.name))
-			
+
 			if tt.setupConfig {
 				if err := createTestConfig(t, configPath, tt.configContent); err != nil {
 					t.Fatalf("Failed to create test config: %v", err)
@@ -516,7 +516,7 @@ func TestSwitchErrorHandling(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 			switchCmd.SetOut(&stdout)
 			switchCmd.SetErr(&stderr)
-			
+
 			switchCmd.SetArgs(tt.args)
 			err := switchCmd.Execute()
 
@@ -536,7 +536,7 @@ func TestSwitchErrorHandling(t *testing.T) {
 // initSwitchTestRepository creates a test repository suitable for switch operations
 func initSwitchTestRepository(t *testing.T, repoPath string) error {
 	t.Helper()
-	
+
 	if err := os.MkdirAll(repoPath, 0755); err != nil {
 		return err
 	}
@@ -553,7 +553,7 @@ func initSwitchTestRepository(t *testing.T, repoPath string) error {
 		{"git", "config", "user.name", "Test User"},
 		{"git", "config", "user.email", "test@example.com"},
 	}
-	
+
 	for _, cmdArgs := range cmds {
 		cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
 		cmd.Dir = repoPath

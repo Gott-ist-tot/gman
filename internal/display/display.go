@@ -5,8 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fatih/color"
 	"gman/pkg/types"
+
+	"github.com/fatih/color"
 )
 
 // StatusDisplayer handles displaying repository status in a nice format
@@ -262,10 +263,10 @@ func formatCommitTime(t time.Time) string {
 	if t.IsZero() {
 		return ""
 	}
-	
+
 	now := time.Now()
 	diff := now.Sub(t)
-	
+
 	if diff < time.Hour {
 		minutes := int(diff.Minutes())
 		if minutes < 1 {

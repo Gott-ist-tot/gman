@@ -8,7 +8,7 @@ import (
 var (
 	// Base colors
 	ColorPrimary   = lipgloss.Color("#7C3AED") // Purple
-	ColorSecondary = lipgloss.Color("#10B981") // Green  
+	ColorSecondary = lipgloss.Color("#10B981") // Green
 	ColorAccent    = lipgloss.Color("#F59E0B") // Amber
 	ColorDanger    = lipgloss.Color("#EF4444") // Red
 	ColorWarning   = lipgloss.Color("#F59E0B") // Amber
@@ -36,7 +36,7 @@ var (
 
 	// Status colors
 	ColorStatusClean  = lipgloss.Color("#10B981") // Green
-	ColorStatusDirty  = lipgloss.Color("#F59E0B") // Amber  
+	ColorStatusDirty  = lipgloss.Color("#F59E0B") // Amber
 	ColorStatusAhead  = lipgloss.Color("#3B82F6") // Blue
 	ColorStatusBehind = lipgloss.Color("#8B5CF6") // Light purple
 	ColorStatusError  = lipgloss.Color("#EF4444") // Red
@@ -186,15 +186,15 @@ var (
 
 // Theme represents a color theme for the application
 type Theme struct {
-	Name        string
-	Primary     lipgloss.Color
-	Secondary   lipgloss.Color
-	Background  lipgloss.Color
-	Surface     lipgloss.Color
-	OnPrimary   lipgloss.Color
-	OnSecondary lipgloss.Color
+	Name         string
+	Primary      lipgloss.Color
+	Secondary    lipgloss.Color
+	Background   lipgloss.Color
+	Surface      lipgloss.Color
+	OnPrimary    lipgloss.Color
+	OnSecondary  lipgloss.Color
 	OnBackground lipgloss.Color
-	OnSurface   lipgloss.Color
+	OnSurface    lipgloss.Color
 }
 
 // Default themes
@@ -291,10 +291,10 @@ func CalculatePanelDimensions(totalWidth, totalHeight int) (int, int, int, int) 
 	// Calculate dimensions for 4-panel layout
 	// Top-left: Repository list, Top-right: Status detail
 	// Bottom-left: Search, Bottom-right: Preview
-	
+
 	halfWidth := (totalWidth - PanelMargin*3) / 2
 	halfHeight := (totalHeight - PanelMargin*3) / 2
-	
+
 	return halfWidth, halfHeight, halfWidth, halfHeight
 }
 
@@ -302,7 +302,7 @@ func CalculatePanelDimensions(totalWidth, totalHeight int) (int, int, int, int) 
 func CreatePanel(content string, title string, width, height int, focused bool) string {
 	style := PanelStyle
 	titleStyle := PanelTitleStyle
-	
+
 	// Add focus indicator to title
 	focusIndicator := ""
 	if focused {
@@ -312,23 +312,23 @@ func CreatePanel(content string, title string, width, height int, focused bool) 
 	} else {
 		focusIndicator = "  "
 	}
-	
+
 	// Create title bar with focus indicator
 	titleText := focusIndicator + title
 	titleBar := titleStyle.Width(width - 2).Render(titleText)
-	
+
 	// Create content area
 	contentHeight := height - 3 // Account for title and borders
-	
+
 	// Add padding to content if empty or very short
 	if len(content) < 20 {
 		content = content + "\n\n" // Add some breathing room
 	}
-	
+
 	contentArea := style.
 		Width(width).
 		Height(contentHeight).
 		Render(content)
-	
+
 	return lipgloss.JoinVertical(lipgloss.Left, titleBar, contentArea)
 }

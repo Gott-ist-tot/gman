@@ -6,10 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
-	"gman/internal/config"
+	"gman/internal/di"
 	"gman/internal/index"
+
 	"github.com/fatih/color"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -85,7 +86,8 @@ is taking up too much disk space.`,
 }
 
 func init() {
-	rootCmd.AddCommand(indexCmd)
+	// Command is now available via: gman tools index
+	// Removed direct rootCmd registration to avoid duplication
 	indexCmd.AddCommand(indexRebuildCmd)
 	indexCmd.AddCommand(indexUpdateCmd)
 	indexCmd.AddCommand(indexStatsCmd)
@@ -99,7 +101,7 @@ func init() {
 
 func runIndexRebuild(cmd *cobra.Command, args []string) error {
 	// Load configuration
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	if err := configMgr.Load(); err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
@@ -113,7 +115,7 @@ func runIndexRebuild(cmd *cobra.Command, args []string) error {
 	if !indexForce {
 		fmt.Printf("%s This will completely rebuild the search index.\n", color.YellowString("⚠️"))
 		fmt.Printf("All existing index data will be removed. Continue? [y/N]: ")
-		
+
 		var response string
 		fmt.Scanln(&response)
 		if response != "y" && response != "Y" {
@@ -135,7 +137,7 @@ func runIndexRebuild(cmd *cobra.Command, args []string) error {
 		progressFunc = func(message string, current, total int) {
 			if total > 0 {
 				percent := float64(current) / float64(total) * 100
-				fmt.Fprintf(os.Stderr, "\r%s [%3.0f%%] %s", 
+				fmt.Fprintf(os.Stderr, "\r%s [%3.0f%%] %s",
 					color.BlueString("🔄"), percent, message)
 			} else {
 				fmt.Fprintf(os.Stderr, "\r%s %s", color.BlueString("🔄"), message)
@@ -144,9 +146,9 @@ func runIndexRebuild(cmd *cobra.Command, args []string) error {
 	}
 
 	start := time.Now()
-	
+
 	if !indexQuiet {
-		fmt.Printf("%s Starting index rebuild for %d repositories...\n", 
+		fmt.Printf("%s Starting index rebuild for %d repositories...\n",
 			color.GreenString("🔧"), len(cfg.Repositories))
 	}
 
@@ -162,9 +164,9 @@ func runIndexRebuild(cmd *cobra.Command, args []string) error {
 	if !indexQuiet {
 		fmt.Fprintf(os.Stderr, "\n")
 		duration := time.Since(start)
-		fmt.Printf("%s Index rebuild completed in %v\n", 
+		fmt.Printf("%s Index rebuild completed in %v\n",
 			color.GreenString("✅"), duration.Round(time.Second))
-		
+
 		// Show stats
 		return showIndexStats(indexer)
 	}
@@ -174,7 +176,7 @@ func runIndexRebuild(cmd *cobra.Command, args []string) error {
 
 func runIndexUpdate(cmd *cobra.Command, args []string) error {
 	// Load configuration
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	if err := configMgr.Load(); err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
@@ -192,9 +194,9 @@ func runIndexUpdate(cmd *cobra.Command, args []string) error {
 	defer indexer.Close()
 
 	start := time.Now()
-	
+
 	if !indexQuiet {
-		fmt.Printf("%s Updating index for %d repositories...\n", 
+		fmt.Printf("%s Updating index for %d repositories...\n",
 			color.BlueString("🔄"), len(cfg.Repositories))
 	}
 
@@ -206,9 +208,9 @@ func runIndexUpdate(cmd *cobra.Command, args []string) error {
 
 	if !indexQuiet {
 		duration := time.Since(start)
-		fmt.Printf("%s Index update completed in %v\n", 
+		fmt.Printf("%s Index update completed in %v\n",
 			color.GreenString("✅"), duration.Round(time.Second))
-		
+
 		// Show stats
 		return showIndexStats(indexer)
 	}
@@ -218,7 +220,7 @@ func runIndexUpdate(cmd *cobra.Command, args []string) error {
 
 func runIndexStats(cmd *cobra.Command, args []string) error {
 	// Load configuration
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	if err := configMgr.Load(); err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
@@ -238,7 +240,7 @@ func runIndexClear(cmd *cobra.Command, args []string) error {
 	if !indexForce {
 		fmt.Printf("%s This will remove all search index data.\n", color.YellowString("⚠️"))
 		fmt.Printf("You will need to rebuild the index before using 'gman find'. Continue? [y/N]: ")
-		
+
 		var response string
 		fmt.Scanln(&response)
 		if response != "y" && response != "Y" {
@@ -248,7 +250,7 @@ func runIndexClear(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load configuration
-	configMgr := config.NewManager()
+	configMgr := di.ConfigManager()
 	if err := configMgr.Load(); err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
@@ -324,4 +326,3 @@ func formatBytes(bytes int64) string {
 
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
-
