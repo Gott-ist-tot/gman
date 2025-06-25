@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	
+	"gman/test"
 )
 
 // TestWorktreeAddCommand tests the worktree add functionality
@@ -20,7 +22,7 @@ func TestWorktreeAddCommand(t *testing.T) {
 
 	// Initialize test repository
 	repoPath := filepath.Join(tempDir, "test-repo")
-	if err := initWorktreeTestRepository(t, repoPath); err != nil {
+	if err := test.InitTestRepositoryWithBranches(t, repoPath, []string{"main", "feature"}); err != nil {
 		t.Fatalf("Failed to initialize test repository: %v", err)
 	}
 
@@ -127,7 +129,7 @@ func TestWorktreeListCommand(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	repoPath := filepath.Join(tempDir, "test-repo")
-	if err := initWorktreeTestRepository(t, repoPath); err != nil {
+	if err := test.InitTestRepositoryWithBranches(t, repoPath, []string{"main", "feature"}); err != nil {
 		t.Fatalf("Failed to initialize test repository: %v", err)
 	}
 
@@ -174,7 +176,7 @@ func TestWorktreeListCommand(t *testing.T) {
 
 	// Add empty repo for testing
 	emptyRepoPath := filepath.Join(tempDir, "empty-repo")
-	if err := initEmptyTestRepository(t, emptyRepoPath); err != nil {
+	if err := test.InitBasicTestRepository(t, emptyRepoPath); err != nil {
 		t.Fatalf("Failed to create empty repo: %v", err)
 	}
 
@@ -235,7 +237,7 @@ func TestWorktreeRemoveCommand(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	repoPath := filepath.Join(tempDir, "test-repo")
-	if err := initWorktreeTestRepository(t, repoPath); err != nil {
+	if err := test.InitTestRepositoryWithBranches(t, repoPath, []string{"main", "feature"}); err != nil {
 		t.Fatalf("Failed to initialize test repository: %v", err)
 	}
 
@@ -362,7 +364,7 @@ func TestWorktreeComplexScenarios(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	repoPath := filepath.Join(tempDir, "test-repo")
-	if err := initWorktreeTestRepository(t, repoPath); err != nil {
+	if err := test.InitTestRepositoryWithBranches(t, repoPath, []string{"main", "feature"}); err != nil {
 		t.Fatalf("Failed to initialize test repository: %v", err)
 	}
 
@@ -478,97 +480,32 @@ func TestWorktreeComplexScenarios(t *testing.T) {
 
 // Helper functions specific to worktree testing
 
-// initWorktreeTestRepository creates a test repository suitable for worktree operations
-func initWorktreeTestRepository(t *testing.T, repoPath string) error {
-	t.Helper()
-
-	if err := os.MkdirAll(repoPath, 0755); err != nil {
-		return err
-	}
-
-	// Initialize git repository
-	cmd := exec.Command("git", "init")
-	cmd.Dir = repoPath
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to init git repo: %w", err)
-	}
-
-	// Configure git user
-	cmds := [][]string{
-		{"git", "config", "user.name", "Test User"},
-		{"git", "config", "user.email", "test@example.com"},
-	}
-
-	for _, cmdArgs := range cmds {
-		cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
-		cmd.Dir = repoPath
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("failed to configure git: %w", err)
-		}
-	}
-
-	// Create initial file and commit
-	testFile := filepath.Join(repoPath, "README.md")
-	if err := os.WriteFile(testFile, []byte("# Test Repository\n\nThis is a test repository for worktree operations.\n"), 0644); err != nil {
-		return err
-	}
-
-	cmds = [][]string{
-		{"git", "add", "README.md"},
-		{"git", "commit", "-m", "Initial commit"},
-	}
-
-	for _, cmdArgs := range cmds {
-		cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
-		cmd.Dir = repoPath
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("failed to create initial commit: %w", err)
-		}
-	}
-
-	return nil
-}
-
-// createTestWorktree creates a worktree for testing purposes
 func createTestWorktree(t *testing.T, repoPath, wtPath, branchName string) error {
 	t.Helper()
-
-	cmd := exec.Command("git", "worktree", "add", wtPath, "-b", branchName)
+	
+	cmd := exec.Command("git", "worktree", "add", "-b", branchName, wtPath)
 	cmd.Dir = repoPath
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create test worktree: %w", err)
-	}
-
-	return nil
+	return cmd.Run()
 }
 
-// initEmptyTestRepository creates an empty test repository with no worktrees
-func initEmptyTestRepository(t *testing.T, repoPath string) error {
+func createTestConfig(t *testing.T, configPath string, repositories map[string]string) error {
 	t.Helper()
-
-	if err := os.MkdirAll(repoPath, 0755); err != nil {
-		return err
+	
+	configDir := filepath.Dir(configPath)
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	cmd := exec.Command("git", "init")
-	cmd.Dir = repoPath
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to init empty git repo: %w", err)
+	config := `repositories:`
+	for alias, path := range repositories {
+		config += fmt.Sprintf("\n  %s: %s", alias, path)
 	}
+	config += "\n"
 
-	// Configure git user
-	cmds := [][]string{
-		{"git", "config", "user.name", "Test User"},
-		{"git", "config", "user.email", "test@example.com"},
-	}
-
-	for _, cmdArgs := range cmds {
-		cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
-		cmd.Dir = repoPath
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("failed to configure empty repo: %w", err)
-		}
+	if err := os.WriteFile(configPath, []byte(config), 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
 	return nil
 }
+

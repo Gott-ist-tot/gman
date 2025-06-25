@@ -20,8 +20,15 @@ type RepositorySelectedMsg struct {
 	Path  string
 }
 
-// RepositoryStatusMsg is sent when repository status is updated
+// RepositoryStatusMsg is sent when repository status is updated (initial fast load)
 type RepositoryStatusMsg struct {
+	Alias  string
+	Status *types.RepoStatus
+	Error  error
+}
+
+// RepositoryStatusRefreshMsg is sent when repository status is refreshed with full fetch
+type RepositoryStatusRefreshMsg struct {
 	Alias  string
 	Status *types.RepoStatus
 	Error  error

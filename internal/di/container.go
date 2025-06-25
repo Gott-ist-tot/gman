@@ -60,49 +60,64 @@ func (c *Container) Initialize() error {
 // GetConfigManager returns the config manager instance
 func (c *Container) GetConfigManager() *config.Manager {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	if !c.initialized {
-		// Auto-initialize if not done
+	if c.initialized {
+		c.access_count++
+		configMgr := c.configManager
 		c.mu.RUnlock()
-		c.Initialize()
-		c.mu.RLock()
+		return configMgr
 	}
+	c.mu.RUnlock()
 
+	// Auto-initialize if not done (outside of read lock to avoid deadlock)
+	c.Initialize()
+	
+	c.mu.RLock()
 	c.access_count++
-	return c.configManager
+	configMgr := c.configManager
+	c.mu.RUnlock()
+	return configMgr
 }
 
 // GetGitManager returns the git manager instance
 func (c *Container) GetGitManager() *git.Manager {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	if !c.initialized {
-		// Auto-initialize if not done
+	if c.initialized {
+		c.access_count++
+		gitMgr := c.gitManager
 		c.mu.RUnlock()
-		c.Initialize()
-		c.mu.RLock()
+		return gitMgr
 	}
+	c.mu.RUnlock()
 
+	// Auto-initialize if not done (outside of read lock to avoid deadlock)
+	c.Initialize()
+	
+	c.mu.RLock()
 	c.access_count++
-	return c.gitManager
+	gitMgr := c.gitManager
+	c.mu.RUnlock()
+	return gitMgr
 }
 
 // GetGitFacade returns the git facade instance
 func (c *Container) GetGitFacade() *git.GitManager {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	if !c.initialized {
-		// Auto-initialize if not done
+	if c.initialized {
+		c.access_count++
+		facade := c.gitFacade
 		c.mu.RUnlock()
-		c.Initialize()
-		c.mu.RLock()
+		return facade
 	}
+	c.mu.RUnlock()
 
+	// Auto-initialize if not done (outside of read lock to avoid deadlock)
+	c.Initialize()
+	
+	c.mu.RLock()
 	c.access_count++
-	return c.gitFacade
+	facade := c.gitFacade
+	c.mu.RUnlock()
+	return facade
 }
 
 // GetStatusReader returns a StatusReader interface

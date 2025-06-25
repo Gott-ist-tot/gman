@@ -210,10 +210,20 @@ func runWorktreeRemove(cmd *cobra.Command, args []string) error {
 
 	// Create git manager and remove worktree
 	gitMgr := di.GitManager()
-	if err := gitMgr.RemoveWorktree(repoPath, absWorktreePath, worktreeForce); err != nil {
-		if strings.Contains(err.Error(), "uncommitted changes") && !worktreeForce {
-			return fmt.Errorf("worktree has uncommitted changes. Use --force to remove anyway: %w", err)
+	
+	// Check for uncommitted changes before removal (more robust than string matching)
+	if !worktreeForce {
+		hasChanges, err := gitMgr.HasUncommittedChanges(absWorktreePath)
+		if err != nil {
+			// If we can't check status, it might be because worktree doesn't exist or is corrupt
+			// In this case, proceed with removal but warn about the check failure
+			fmt.Printf("⚠️  Warning: Could not check worktree status: %v\n", err)
+		} else if hasChanges {
+			return fmt.Errorf("worktree has uncommitted changes. Use --force to remove anyway")
 		}
+	}
+	
+	if err := gitMgr.RemoveWorktree(repoPath, absWorktreePath, worktreeForce); err != nil {
 		return fmt.Errorf("failed to remove worktree: %w", err)
 	}
 

@@ -47,8 +47,11 @@ func NewRepositoryPanel(state *models.AppState) *RepositoryPanel {
 func (r *RepositoryPanel) Init() tea.Cmd {
 	var cmds []tea.Cmd
 
-	// Load repository status
+	// Load repository status quickly (no fetch) for immediate display
 	cmds = append(cmds, r.loadRepositoryStatus())
+	
+	// Schedule a delayed full refresh with fetch for accurate sync status
+	cmds = append(cmds, r.scheduleFullRefresh())
 
 	// If a repository is auto-selected, trigger selection message
 	if r.state.SelectedRepo != "" && len(r.repos) > 0 {
@@ -80,6 +83,15 @@ func (r *RepositoryPanel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case models.RepositoryStatusMsg:
 		r.updateRepositoryStatus(msg.Alias, msg.Status)
+
+	case models.RepositoryStatusRefreshMsg:
+		r.updateRepositoryStatus(msg.Alias, msg.Status)
+
+	case models.BackgroundTaskMsg:
+		if msg.TaskType == "full_refresh" {
+			// Trigger full refresh with fetch in background
+			cmds = append(cmds, tea.Batch(r.loadRepositoryStatusWithFetchBatch()...))
+		}
 
 	case models.FilterChangedMsg:
 		r.state.RepositoryListState.FilterText = msg.FilterText
@@ -256,11 +268,48 @@ func (r *RepositoryPanel) loadRepositoryStatusBatch() []tea.Cmd {
 	return cmds
 }
 
-// loadSingleRepositoryStatus loads status for a single repository
+// scheduleFullRefresh schedules a delayed full refresh with fetch
+func (r *RepositoryPanel) scheduleFullRefresh() tea.Cmd {
+	return tea.Tick(time.Millisecond*500, func(t time.Time) tea.Msg {
+		return models.BackgroundTaskMsg{
+			TaskType: "full_refresh",
+			Data:     nil,
+			Error:    nil,
+		}
+	})
+}
+
+// loadRepositoryStatusWithFetchBatch creates commands to load status with fetch for all repos
+func (r *RepositoryPanel) loadRepositoryStatusWithFetchBatch() []tea.Cmd {
+	var cmds []tea.Cmd
+
+	for alias, path := range r.state.Repositories {
+		cmds = append(cmds, r.loadSingleRepositoryStatusWithFetch(alias, path))
+	}
+
+	return cmds
+}
+
+// loadSingleRepositoryStatus loads status for a single repository (fast, no fetch)
 func (r *RepositoryPanel) loadSingleRepositoryStatus(alias, path string) tea.Cmd {
 	return func() tea.Msg {
-		status := r.gitMgr.GetRepoStatus(alias, path)
+		// Use fast loading without fetch for initial display
+		statusReader := di.StatusReader()
+		status := statusReader.GetRepoStatusNoFetch(alias, path)
 		return models.RepositoryStatusMsg{
+			Alias:  alias,
+			Status: &status,
+			Error:  status.Error,
+		}
+	}
+}
+
+// loadSingleRepositoryStatusWithFetch loads status for a single repository with full fetch
+func (r *RepositoryPanel) loadSingleRepositoryStatusWithFetch(alias, path string) tea.Cmd {
+	return func() tea.Msg {
+		// Use full loading with fetch for accurate sync status
+		status := r.gitMgr.GetRepoStatus(alias, path)
+		return models.RepositoryStatusRefreshMsg{
 			Alias:  alias,
 			Status: &status,
 			Error:  status.Error,

@@ -26,8 +26,18 @@ func NewManager() *Manager {
 	}
 }
 
-// GetRepoStatus gets the status of a single repository
+// GetRepoStatus gets the status of a single repository with fetch
 func (g *Manager) GetRepoStatus(alias, path string) types.RepoStatus {
+	return g.getRepoStatusInternal(alias, path, true)
+}
+
+// GetRepoStatusNoFetch gets the status of a single repository without fetch (for fast loading)
+func (g *Manager) GetRepoStatusNoFetch(alias, path string) types.RepoStatus {
+	return g.getRepoStatusInternal(alias, path, false)
+}
+
+// getRepoStatusInternal gets the status of a single repository
+func (g *Manager) getRepoStatusInternal(alias, path string, withFetch bool) types.RepoStatus {
 	status := types.RepoStatus{
 		Alias: alias,
 		Path:  path,
@@ -59,7 +69,7 @@ func (g *Manager) GetRepoStatus(alias, path string) types.RepoStatus {
 	status.Workspace = workspaceStatus
 
 	// Get sync status
-	syncStatus, err := g.getSyncStatus(path)
+	syncStatus, err := g.getSyncStatusInternal(path, withFetch)
 	if err != nil {
 		status.Error = err
 		return status
@@ -95,26 +105,60 @@ func (g *Manager) GetRepoStatus(alias, path string) types.RepoStatus {
 
 // GetAllRepoStatus gets status for multiple repositories concurrently
 func (g *Manager) GetAllRepoStatus(repositories map[string]string) ([]types.RepoStatus, error) {
+	return g.getAllRepoStatusInternal(repositories, true)
+}
+
+// GetAllRepoStatusNoFetch gets status for multiple repositories concurrently without fetch
+func (g *Manager) GetAllRepoStatusNoFetch(repositories map[string]string) ([]types.RepoStatus, error) {
+	return g.getAllRepoStatusInternal(repositories, false)
+}
+
+// getAllRepoStatusInternal gets status for multiple repositories with configurable fetch behavior
+func (g *Manager) getAllRepoStatusInternal(repositories map[string]string, withFetch bool) ([]types.RepoStatus, error) {
+	repoCount := len(repositories)
+	if repoCount == 0 {
+		return []types.RepoStatus{}, nil
+	}
+
 	var wg sync.WaitGroup
-	statusChan := make(chan types.RepoStatus, len(repositories))
+	// Use buffered channel with capacity equal to repo count to avoid blocking
+	statusChan := make(chan types.RepoStatus, repoCount)
+
+	// Dynamic semaphore size based on repository count
+	maxConcurrency := 5
+	if repoCount < 3 {
+		maxConcurrency = repoCount
+	} else if repoCount > 20 {
+		maxConcurrency = 10 // Increase for large repo counts but cap to prevent memory issues
+	}
+	
+	semaphore := make(chan struct{}, maxConcurrency)
 
 	for alias, path := range repositories {
 		wg.Add(1)
 		go func(alias, path string) {
 			defer wg.Done()
-			status := g.GetRepoStatus(alias, path)
+			semaphore <- struct{}{}        // Acquire semaphore
+			defer func() { <-semaphore }() // Release semaphore
+
+			var status types.RepoStatus
+			if withFetch {
+				status = g.GetRepoStatus(alias, path)
+			} else {
+				status = g.GetRepoStatusNoFetch(alias, path)
+			}
 			statusChan <- status
 		}(alias, path)
 	}
 
-	// Wait for all goroutines to complete
+	// Close channel when all goroutines complete
 	go func() {
 		wg.Wait()
 		close(statusChan)
 	}()
 
-	// Collect results
-	var statuses []types.RepoStatus
+	// Pre-allocate slice with known capacity to reduce memory allocations
+	statuses := make([]types.RepoStatus, 0, repoCount)
 	for status := range statusChan {
 		statuses = append(statuses, status)
 	}
@@ -162,10 +206,111 @@ func (g *Manager) SyncAllRepositories(repositories map[string]string, mode strin
 
 // RunCommand runs a git command in the specified repository
 func (g *Manager) RunCommand(path string, args ...string) (string, error) {
+	// Validate path to prevent directory traversal
+	if err := g.validatePath(path); err != nil {
+		return "", fmt.Errorf("invalid repository path: %w", err)
+	}
+
+	// Validate git arguments to prevent command injection
+	if err := g.validateGitArgs(args); err != nil {
+		return "", fmt.Errorf("invalid git arguments: %w", err)
+	}
+
 	cmd := exec.Command("git", args...)
 	cmd.Dir = path
 	output, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(output)), err
+}
+
+// validatePath validates that the path is safe and absolute
+func (g *Manager) validatePath(path string) error {
+	if path == "" {
+		return fmt.Errorf("path cannot be empty")
+	}
+
+	// Convert to absolute path for safety
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("failed to resolve absolute path: %w", err)
+	}
+
+	// Check for directory traversal attempts
+	cleanPath := filepath.Clean(absPath)
+	if cleanPath != absPath {
+		return fmt.Errorf("path contains directory traversal elements")
+	}
+
+	// Verify path exists and is a directory
+	stat, err := os.Stat(cleanPath)
+	if err != nil {
+		return fmt.Errorf("path does not exist: %w", err)
+	}
+
+	if !stat.IsDir() {
+		return fmt.Errorf("path is not a directory")
+	}
+
+	return nil
+}
+
+// validateGitArgs validates git command arguments to prevent injection
+func (g *Manager) validateGitArgs(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("no git arguments provided")
+	}
+
+	// Whitelist of allowed git commands for security
+	allowedCommands := map[string]bool{
+		"status":    true,
+		"rev-parse": true,
+		"log":       true,
+		"fetch":     true,
+		"pull":      true,
+		"push":      true,
+		"checkout":  true,
+		"branch":    true,
+		"commit":    true,
+		"add":       true,
+		"diff":      true,
+		"show":      true,
+		"stash":     true,
+		"rev-list":  true,
+		"worktree":  true,
+		"merge":     true,
+		"reset":     true,
+		"config":    true, // For test environments only
+	}
+
+	if !allowedCommands[args[0]] {
+		return fmt.Errorf("git command '%s' is not allowed", args[0])
+	}
+
+	// Check for suspicious characters in arguments
+	for i, arg := range args {
+		if err := g.validateArgument(arg); err != nil {
+			return fmt.Errorf("invalid argument at position %d: %w", i, err)
+		}
+	}
+
+	return nil
+}
+
+// validateArgument validates a single command argument
+func (g *Manager) validateArgument(arg string) error {
+	// Check for shell metacharacters that could be used for injection
+	dangerousChars := []string{";", "|", "&", "$", "`", "(", ")", "<", ">", "\\"}
+	for _, char := range dangerousChars {
+		if strings.Contains(arg, char) {
+			return fmt.Errorf("argument contains dangerous character: %s", char)
+		}
+	}
+
+	// Check for null bytes
+	if strings.Contains(arg, "\x00") {
+		return fmt.Errorf("argument contains null byte")
+	}
+
+	return nil
 }
 
 // isGitRepository checks if the given path is a git repository
@@ -230,15 +375,20 @@ func (g *Manager) getWorkspaceStatus(path string) (types.WorkspaceStatus, error)
 
 // getSyncStatus gets the sync status with remote
 func (g *Manager) getSyncStatus(path string) (types.SyncStatus, error) {
+	return g.getSyncStatusInternal(path, true)
+}
+
+// getSyncStatusInternal gets the sync status, optionally with remote fetch
+func (g *Manager) getSyncStatusInternal(path string, withFetch bool) (types.SyncStatus, error) {
 	syncStatus := types.SyncStatus{}
 
-	// Attempt to fetch latest from remote
-	_, err := g.RunCommand(path, "fetch", "--quiet")
-	if err != nil {
-		// If fetch fails, mark the sync error but continue with local state
-		syncStatus.SyncError = fmt.Errorf("failed to fetch from remote: %w", err)
-		// Return early with error status - we can't determine accurate sync state
-		return syncStatus, nil
+	// Attempt to fetch latest from remote if requested
+	if withFetch {
+		_, err := g.RunCommand(path, "fetch", "--quiet")
+		if err != nil {
+			// If fetch fails, mark the sync error but continue with local state
+			syncStatus.SyncError = fmt.Errorf("failed to fetch from remote: %w", err)
+		}
 	}
 
 	// Get current branch

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"gman/internal/di"
+	"gman/test"
 )
 
 // TestSwitchCommand tests the switch command with various scenarios
@@ -22,14 +23,13 @@ func TestSwitchCommand(t *testing.T) {
 
 	// Initialize test repository
 	repoPath := filepath.Join(tempDir, "test-repo")
-	if err := initSwitchTestRepository(t, repoPath); err != nil {
+	if err := test.InitBasicTestRepository(t, repoPath); err != nil {
 		t.Fatalf("Failed to initialize test repository: %v", err)
 	}
 
-	// Create basic config (simplified for testing)
+	// Create basic config
 	configPath := filepath.Join(tempDir, "config.yml")
-	configContent := fmt.Sprintf("repositories:\n  test-repo: %s\n", repoPath)
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+	if err := test.CreateBasicTestConfig(t, configPath, map[string]string{"test-repo": repoPath}); err != nil {
 		t.Fatalf("Failed to create test config: %v", err)
 	}
 
@@ -534,52 +534,3 @@ func TestSwitchErrorHandling(t *testing.T) {
 // Helper functions for switch command testing
 
 // initSwitchTestRepository creates a test repository suitable for switch operations
-func initSwitchTestRepository(t *testing.T, repoPath string) error {
-	t.Helper()
-
-	if err := os.MkdirAll(repoPath, 0755); err != nil {
-		return err
-	}
-
-	// Initialize git repository
-	cmd := exec.Command("git", "init")
-	cmd.Dir = repoPath
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to init git repo: %w", err)
-	}
-
-	// Configure git user
-	cmds := [][]string{
-		{"git", "config", "user.name", "Test User"},
-		{"git", "config", "user.email", "test@example.com"},
-	}
-
-	for _, cmdArgs := range cmds {
-		cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
-		cmd.Dir = repoPath
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("failed to configure git: %w", err)
-		}
-	}
-
-	// Create initial file and commit
-	testFile := filepath.Join(repoPath, "README.md")
-	if err := os.WriteFile(testFile, []byte("# Test Repository\n\nThis is a test repository for switch operations.\n"), 0644); err != nil {
-		return err
-	}
-
-	cmds = [][]string{
-		{"git", "add", "README.md"},
-		{"git", "commit", "-m", "Initial commit"},
-	}
-
-	for _, cmdArgs := range cmds {
-		cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
-		cmd.Dir = repoPath
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("failed to create initial commit: %w", err)
-		}
-	}
-
-	return nil
-}

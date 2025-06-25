@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"gman/internal/di"
+	"gman/test"
 
 	"github.com/spf13/cobra"
 )
@@ -26,13 +27,13 @@ func TestDiffFileCommand(t *testing.T) {
 
 	// Initialize a test repository
 	repoPath := filepath.Join(tempDir, "test-repo")
-	if err := initTestRepository(t, repoPath); err != nil {
+	if err := test.InitTestRepositoryWithBranches(t, repoPath, []string{"main", "feature"}); err != nil {
 		t.Fatalf("Failed to initialize test repository: %v", err)
 	}
 
 	// Create a test configuration
 	configPath := filepath.Join(tempDir, "config.yml")
-	if err := createTestConfig(t, configPath, map[string]string{"test-repo": repoPath}); err != nil {
+	if err := test.CreateBasicTestConfig(t, configPath, map[string]string{"test-repo": repoPath}); err != nil {
 		t.Fatalf("Failed to create test config: %v", err)
 	}
 

@@ -8,7 +8,9 @@ import (
 type StatusReader interface {
 	// Repository status operations
 	GetRepoStatus(alias, path string) types.RepoStatus
+	GetRepoStatusNoFetch(alias, path string) types.RepoStatus // Fast status without network operations
 	GetAllRepoStatus(repositories map[string]string) ([]types.RepoStatus, error)
+	GetAllRepoStatusNoFetch(repositories map[string]string) ([]types.RepoStatus, error) // Fast status for multiple repos
 	IsGitRepository(path string) bool
 
 	// Change detection

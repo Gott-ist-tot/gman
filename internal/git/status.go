@@ -25,8 +25,18 @@ func NewStatusManager() *StatusManager {
 	}
 }
 
-// GetRepoStatus gets the status of a single repository
+// GetRepoStatus gets the status of a single repository with fetch
 func (s *StatusManager) GetRepoStatus(alias, path string) types.RepoStatus {
+	return s.getRepoStatusInternal(alias, path, true)
+}
+
+// GetRepoStatusNoFetch gets the status of a single repository without fetch (for fast loading)
+func (s *StatusManager) GetRepoStatusNoFetch(alias, path string) types.RepoStatus {
+	return s.getRepoStatusInternal(alias, path, false)
+}
+
+// getRepoStatusInternal gets the status of a single repository
+func (s *StatusManager) getRepoStatusInternal(alias, path string, withFetch bool) types.RepoStatus {
 	status := types.RepoStatus{
 		Alias: alias,
 		Path:  path,
@@ -58,7 +68,7 @@ func (s *StatusManager) GetRepoStatus(alias, path string) types.RepoStatus {
 	status.Workspace = workspaceStatus
 
 	// Get sync status
-	syncStatus, err := s.getSyncStatus(path)
+	syncStatus, err := s.getSyncStatusInternal(path, withFetch)
 	if err != nil {
 		status.Error = err
 		return status
@@ -94,11 +104,36 @@ func (s *StatusManager) GetRepoStatus(alias, path string) types.RepoStatus {
 
 // GetAllRepoStatus gets status for multiple repositories concurrently
 func (s *StatusManager) GetAllRepoStatus(repositories map[string]string) ([]types.RepoStatus, error) {
-	var wg sync.WaitGroup
-	statusChan := make(chan types.RepoStatus, len(repositories))
+	return s.getAllRepoStatusInternal(repositories, true)
+}
 
-	// Use semaphore to limit concurrent operations
-	semaphore := make(chan struct{}, 5)
+// GetAllRepoStatusNoFetch gets status for multiple repositories concurrently without fetch
+func (s *StatusManager) GetAllRepoStatusNoFetch(repositories map[string]string) ([]types.RepoStatus, error) {
+	return s.getAllRepoStatusInternal(repositories, false)
+}
+
+// getAllRepoStatusInternal gets status for multiple repositories with configurable fetch behavior
+func (s *StatusManager) getAllRepoStatusInternal(repositories map[string]string, withFetch bool) ([]types.RepoStatus, error) {
+	repoCount := len(repositories)
+	if repoCount == 0 {
+		return []types.RepoStatus{}, nil
+	}
+
+	var wg sync.WaitGroup
+	// Use buffered channel with capacity equal to repo count to avoid blocking
+	statusChan := make(chan types.RepoStatus, repoCount)
+
+	// Dynamic semaphore size based on repository count
+	// For small numbers, use fewer goroutines to reduce overhead
+	// For large numbers, cap at reasonable limit to prevent resource exhaustion
+	maxConcurrency := 5
+	if repoCount < 3 {
+		maxConcurrency = repoCount
+	} else if repoCount > 20 {
+		maxConcurrency = 10 // Increase for large repo counts but cap to prevent memory issues
+	}
+	
+	semaphore := make(chan struct{}, maxConcurrency)
 
 	for alias, path := range repositories {
 		wg.Add(1)
@@ -107,7 +142,12 @@ func (s *StatusManager) GetAllRepoStatus(repositories map[string]string) ([]type
 			semaphore <- struct{}{}        // Acquire semaphore
 			defer func() { <-semaphore }() // Release semaphore
 
-			status := s.GetRepoStatus(alias, path)
+			var status types.RepoStatus
+			if withFetch {
+				status = s.GetRepoStatus(alias, path)
+			} else {
+				status = s.GetRepoStatusNoFetch(alias, path)
+			}
 			statusChan <- status
 		}(alias, path)
 	}
@@ -118,8 +158,8 @@ func (s *StatusManager) GetAllRepoStatus(repositories map[string]string) ([]type
 		close(statusChan)
 	}()
 
-	// Collect results
-	var statuses []types.RepoStatus
+	// Pre-allocate slice with known capacity to reduce memory allocations
+	statuses := make([]types.RepoStatus, 0, repoCount)
 	for status := range statusChan {
 		statuses = append(statuses, status)
 	}
@@ -231,6 +271,10 @@ func (s *StatusManager) getWorkspaceStatus(path string) (types.WorkspaceStatus, 
 }
 
 func (s *StatusManager) getSyncStatus(path string) (types.SyncStatus, error) {
+	return s.getSyncStatusInternal(path, true)
+}
+
+func (s *StatusManager) getSyncStatusInternal(path string, withFetch bool) (types.SyncStatus, error) {
 	status := types.SyncStatus{}
 
 	// Get current branch
@@ -239,21 +283,30 @@ func (s *StatusManager) getSyncStatus(path string) (types.SyncStatus, error) {
 		return status, err
 	}
 
-	// Fetch to get latest remote info (but ignore errors)
-	s.runGitCommand(path, "fetch", "origin", "--quiet")
+	// Try to fetch latest remote info if requested, but continue even if it fails
+	if withFetch {
+		_, fetchErr := s.runGitCommand(path, "fetch", "origin", "--quiet")
+		if fetchErr != nil {
+			// Store fetch error but continue with cached remote state
+			status.SyncError = fmt.Errorf("failed to fetch from remote: %w", fetchErr)
+		}
+	}
 
 	// Check if upstream exists
 	upstream := fmt.Sprintf("origin/%s", branch)
 	_, err = s.runGitCommand(path, "rev-parse", "--verify", upstream)
 	if err != nil {
-		// No upstream, so no sync status
+		// No upstream, so no sync status - but preserve fetch error if it occurred
 		return status, nil
 	}
 
-	// Get ahead/behind counts
+	// Get ahead/behind counts using cached remote state
 	output, err := s.runGitCommand(path, "rev-list", "--left-right", "--count", fmt.Sprintf("%s...HEAD", upstream))
 	if err != nil {
-		status.SyncError = fmt.Errorf("failed to get sync status: %w", err)
+		// If we already have a fetch error, preserve it; otherwise report sync calculation error
+		if status.SyncError == nil {
+			status.SyncError = fmt.Errorf("failed to calculate sync status: %w", err)
+		}
 		return status, nil
 	}
 

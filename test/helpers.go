@@ -479,3 +479,109 @@ func CleanupPath(t *testing.T, path string) {
 		}
 	})
 }
+
+// InitBasicTestRepository creates a simple git repository with basic structure
+func InitBasicTestRepository(t *testing.T, repoPath string) error {
+	t.Helper()
+
+	if err := os.MkdirAll(repoPath, 0755); err != nil {
+		return err
+	}
+
+	// Initialize git repository
+	if err := runGitCommand(repoPath, "init"); err != nil {
+		return fmt.Errorf("failed to init git repo: %w", err)
+	}
+
+	// Configure git user (required for commits)
+	if err := runGitCommand(repoPath, "config", "user.name", "Test User"); err != nil {
+		return fmt.Errorf("failed to configure git user name: %w", err)
+	}
+	if err := runGitCommand(repoPath, "config", "user.email", "test@example.com"); err != nil {
+		return fmt.Errorf("failed to configure git user email: %w", err)
+	}
+
+	// Create initial file and commit
+	testFile := filepath.Join(repoPath, "test.txt")
+	if err := os.WriteFile(testFile, []byte("initial content"), 0644); err != nil {
+		return fmt.Errorf("failed to create test file: %w", err)
+	}
+
+	if err := runGitCommand(repoPath, "add", "test.txt"); err != nil {
+		return fmt.Errorf("failed to add test file: %w", err)
+	}
+
+	if err := runGitCommand(repoPath, "commit", "-m", "Initial commit"); err != nil {
+		return fmt.Errorf("failed to create initial commit: %w", err)
+	}
+
+	return nil
+}
+
+// InitTestRepositoryWithBranches creates a git repository with multiple branches
+func InitTestRepositoryWithBranches(t *testing.T, repoPath string, branches []string) error {
+	t.Helper()
+
+	if err := InitBasicTestRepository(t, repoPath); err != nil {
+		return err
+	}
+
+	// Create additional branches
+	for _, branchName := range branches {
+		if branchName == "main" || branchName == "master" {
+			continue // Skip main/master branch as it already exists
+		}
+
+		if err := runGitCommand(repoPath, "checkout", "-b", branchName); err != nil {
+			return fmt.Errorf("failed to create branch %s: %w", branchName, err)
+		}
+
+		// Create a unique file in this branch
+		branchFile := filepath.Join(repoPath, fmt.Sprintf("%s.txt", branchName))
+		content := fmt.Sprintf("content for %s branch", branchName)
+		if err := os.WriteFile(branchFile, []byte(content), 0644); err != nil {
+			return fmt.Errorf("failed to create branch file: %w", err)
+		}
+
+		if err := runGitCommand(repoPath, "add", fmt.Sprintf("%s.txt", branchName)); err != nil {
+			return fmt.Errorf("failed to add branch file: %w", err)
+		}
+
+		if err := runGitCommand(repoPath, "commit", "-m", fmt.Sprintf("Add %s content", branchName)); err != nil {
+			return fmt.Errorf("failed to commit branch changes: %w", err)
+		}
+	}
+
+	// Switch back to main
+	if err := runGitCommand(repoPath, "checkout", "main"); err != nil {
+		// Try master if main doesn't exist
+		if err := runGitCommand(repoPath, "checkout", "master"); err != nil {
+			return fmt.Errorf("failed to switch back to main/master: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// CreateBasicTestConfig creates a simple test configuration file
+func CreateBasicTestConfig(t *testing.T, configPath string, repositories map[string]string) error {
+	t.Helper()
+
+	// Ensure the config directory exists
+	configDir := filepath.Dir(configPath)
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	config := `repositories:`
+	for alias, path := range repositories {
+		config += fmt.Sprintf("\n  %s: %s", alias, path)
+	}
+	config += "\n"
+
+	if err := os.WriteFile(configPath, []byte(config), 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	return nil
+}
