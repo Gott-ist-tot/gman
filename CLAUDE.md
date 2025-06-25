@@ -18,6 +18,31 @@ gman is a Git repository management CLI tool built in Go. It allows developers t
 - `make lint` - Run golangci-lint (requires golangci-lint to be installed)
 - `make fmt` - Format code with go fmt
 
+#### Test Coverage Strategy
+The project maintains comprehensive test coverage across multiple layers:
+
+**Unit Tests:**
+- `internal/git/git_test.go` - Git operations, diff functionality, worktree management
+- `internal/interactive/selector_test.go` - Interactive selection components
+- `internal/index/indexer_test.go` - Search indexing system and SQLite operations
+- `pkg/types/` - Type definitions and validation
+
+**Command Tests:**
+- `cmd/diff_test.go` - File comparison commands (branch diff, cross-repo diff)
+- `cmd/worktree_test.go` - Worktree lifecycle management
+- `cmd/switch_test.go` - Enhanced switch functionality with worktree integration
+
+**Integration Tests:**
+- `test/integration_test.go` - Cross-package functionality
+- `test/helpers.go` - Shared test utilities and mock repositories
+
+**Test Categories:**
+- **Git Integration Tests** - Real Git operations with temporary repositories
+- **Command Line Tests** - End-to-end command execution and output validation
+- **Interactive Component Tests** - Simulated user input and menu navigation
+- **Error Handling Tests** - Edge cases, invalid inputs, and failure recovery
+- **Concurrent Operation Tests** - Multi-repository parallel operations
+
 ### Cross-platform Building
 - `make build-all` - Build for multiple platforms (Linux, macOS, Windows)
 - `make clean` - Clean build artifacts
@@ -32,10 +57,11 @@ gman is a Git repository management CLI tool built in Go. It allows developers t
 
 **Command Structure (cmd/)**
 - Uses Cobra CLI framework for command handling
-- Each command is in its own file (add.go, list.go, status.go, recent.go, group.go, branch.go, batch.go, etc.)
+- Each command is in its own file (add.go, list.go, status.go, recent.go, group.go, branch.go, batch.go, find.go, index.go, etc.)
 - Root command in `cmd/root.go` handles global configuration and initialization
 - Enhanced commands: `recent` for recently accessed repositories, `group` for repository group management
 - Advanced Git workflow commands: `branch` for cross-repository branch management, batch operations (`commit`, `push`, `stash`), `diff` for file comparison across branches and repositories, `worktree` for Git worktree management
+- **Phase 5.0 Search Commands**: `find` for fzf-powered file and commit searching, `index` for search index management
 - Extended sync command with conditional options, dry-run mode, and progress display
 
 **Configuration Management (internal/config/)**
@@ -165,6 +191,24 @@ All Phase 1 and Phase 2 features have been successfully implemented:
 
 These enhancements significantly improve batch operation efficiency and provide advanced Git workflow management across multiple repositories.
 
+### Phase 5.0 - 互動體驗重塑：fzf 深度整合 ✅
+- **SQLite 索引系統**: 高效的全文搜索索引，支援文件和提交搜索
+- **深度 fzf 整合**: 無縫的模糊搜索體驗，跨倉庫文件和提交搜索
+- **智能預覽功能**: 即時的文件內容和提交差異預覽
+- **索引管理命令**: 完整的索引生命週期管理 (`gman index rebuild/update/stats/clear`)
+  - `gman find file [pattern] [--group <name>]` - 跨倉庫文件搜索
+  - `gman find commit [pattern] [--group <name>]` - 跨倉庫提交搜索
+
+### Phase 5.2 - TUI Dashboard：統一管理界面 ✅
+- **Bubble Tea TUI 框架**: 現代化的終端用戶界面
+- **四面板儀表板**: Repository/Status/Search/Preview 統一布局
+- **即時狀態監控**: 實時倉庫狀態更新和視覺指示
+- **鍵盤導航系統**: 完整的快捷鍵支持和 Vim 風格導航
+- **主題系統**: 支援 Dark/Light 主題切換
+- **無縫整合**: 與 Phase 5.1 搜索功能和所有現有 CLI 命令完美整合
+  - `gman dashboard` - 啟動 TUI 儀表板
+  - `gman dash/tui/ui` - 命令別名支持
+
 ## Future Roadmap - 未來功能規劃
 
 ### 🔧 **智能倉庫管理** (未來考慮)
@@ -201,5 +245,95 @@ gman 現已提供完整的多倉庫管理功能，包括：
 - **完整的倉庫狀態管理** (Phase 1)
 - **高級批量操作和群組管理** (Phase 2)  
 - **深度 Git 工作流程整合** (Phase 3.1)
+- **智能搜索和索引系統** (Phase 5.0)
+- **統一 TUI 管理界面** (Phase 5.2)
 
 這些功能足以滿足大多數多倉庫開發場景的需求。未來功能將根據用戶反饋和實際需求進行規劃。
+
+## 常見問題與解決方案 (Common Issues and Solutions)
+
+### 🚨 gman switch 無法切換目錄問題
+
+**問題描述**: 執行 `gman switch <repo>` 後看到 `GMAN_CD:/path/to/repo` 輸出，但當前目錄沒有改變。
+
+**技術原理**: 
+- Go 程序作為子進程運行，受到操作系統進程隔離機制限制
+- 子進程無法修改父 shell 的工作目錄狀態（這是安全設計）
+- `os.Chdir()` 只影響 Go 程序本身，不影響調用它的 shell
+
+**解決方案**: 必須安裝 shell 包裝函數來處理 `GMAN_CD:` 輸出
+
+**診斷步驟**:
+1. **檢查 gman 是否在 PATH 中**:
+   ```bash
+   which gman  # 應該顯示 gman 二進制文件路徑
+   ```
+
+2. **檢查 shell 函數是否已加載**:
+   ```bash
+   type gman   # 應該顯示 "gman is a function"
+   ```
+
+3. **檢查 shell 配置**:
+   ```bash
+   grep -n "gman" ~/.zshrc  # 檢查配置是否存在
+   ```
+
+**完整配置示例** (添加到 `~/.zshrc` 或 `~/.bashrc`):
+```bash
+# gman Git Repository Manager - Shell Integration
+export PATH="/path/to/gman/directory:$PATH"
+
+# gman wrapper function for directory switching
+gman() {
+    local output
+    local exit_code
+
+    # Call the actual gman binary and capture both output and exit code
+    output=$(command gman "$@" 2>&1)
+    exit_code=$?
+
+    # Check if this is a directory change request
+    if [[ "$output" == GMAN_CD:* ]]; then
+        local target_dir="${output#GMAN_CD:}"
+        if [ -d "$target_dir" ]; then
+            cd "$target_dir"
+            echo "Switched to: $target_dir"
+        else
+            echo "Error: Directory not found: $target_dir" >&2
+            return 1
+        fi
+    else
+        # For all other commands, just print the output
+        echo "$output"
+    fi
+
+    return $exit_code
+}
+
+# Enable gman completion if available
+if command -v gman &> /dev/null; then
+    eval "$(gman completion zsh)"  # 或 bash
+fi
+```
+
+**測試驗證**:
+```bash
+# 重新加載配置
+source ~/.zshrc
+
+# 測試功能
+gman switch <repo-alias>
+pwd  # 應該顯示切換後的目錄路徑
+```
+
+### 🔧 測試和開發問題
+
+**測試環境配置**:
+- 使用 `GMAN_CONFIG` 環境變量指定測試配置文件
+- 創建臨時 Git 倉庫進行測試
+
+**調試技巧**:
+- 使用 `gman --config /path/to/test/config.yml` 指定配置
+- 檢查 `~/.config/gman/config.yml` 文件內容
+- 使用 `gman list` 確認倉庫配置正確

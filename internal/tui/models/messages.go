@@ -1,0 +1,187 @@
+package models
+
+import (
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"gman/pkg/types"
+)
+
+// WindowSizeMsg is sent when the terminal window is resized
+type WindowSizeMsg struct {
+	Width  int
+	Height int
+}
+
+// RepositorySelectedMsg is sent when a repository is selected
+type RepositorySelectedMsg struct {
+	Alias string
+	Path  string
+}
+
+// RepositoryStatusMsg is sent when repository status is updated
+type RepositoryStatusMsg struct {
+	Alias  string
+	Status *types.RepoStatus
+	Error  error
+}
+
+// SearchResultsMsg is sent when search results are available
+type SearchResultsMsg struct {
+	Mode    SearchMode
+	Query   string
+	Results []SearchResultItem
+	Error   error
+}
+
+// PreviewContentMsg is sent when preview content is ready
+type PreviewContentMsg struct {
+	Content     string
+	ContentType PreviewType
+	FilePath    string
+	CommitHash  string
+	Error       error
+}
+
+// FilterChangedMsg is sent when repository filter changes
+type FilterChangedMsg struct {
+	FilterText  string
+	FilterGroup string
+}
+
+// SortChangedMsg is sent when sort order changes
+type SortChangedMsg struct {
+	SortBy SortType
+}
+
+// PanelFocusMsg is sent when panel focus changes
+type PanelFocusMsg struct {
+	Panel PanelType
+}
+
+// RefreshMsg is sent to trigger a refresh of repository status
+type RefreshMsg struct {
+	Force bool
+}
+
+// StatusTickMsg is sent periodically to update status
+type StatusTickMsg time.Time
+
+// SearchModeMsg is sent when search mode changes
+type SearchModeMsg struct {
+	Mode SearchMode
+}
+
+// ErrorMsg is sent when an error occurs
+type ErrorMsg struct {
+	Error error
+}
+
+// CommandExecutedMsg is sent when a command is executed
+type CommandExecutedMsg struct {
+	Command string
+	Success bool
+	Output  string
+	Error   error
+}
+
+// HelpToggleMsg is sent when help is toggled
+type HelpToggleMsg struct{}
+
+// ExitMsg is sent when the application should exit
+type ExitMsg struct{}
+
+// FzfLaunchMsg is sent when fzf should be launched
+type FzfLaunchMsg struct {
+	Mode  SearchMode
+	Query string
+}
+
+// BackgroundTaskMsg represents background task completion
+type BackgroundTaskMsg struct {
+	TaskType string
+	Data     interface{}
+	Error    error
+}
+
+// Utility functions for creating commands
+
+// WindowSizeCmd returns a command that sends a WindowSizeMsg
+func WindowSizeCmd(width, height int) tea.Cmd {
+	return func() tea.Msg {
+		return WindowSizeMsg{Width: width, Height: height}
+	}
+}
+
+// RepositorySelectedCmd returns a command that sends a RepositorySelectedMsg
+func RepositorySelectedCmd(alias, path string) tea.Cmd {
+	return func() tea.Msg {
+		return RepositorySelectedMsg{Alias: alias, Path: path}
+	}
+}
+
+// RefreshCmd returns a command that sends a RefreshMsg
+func RefreshCmd(force bool) tea.Cmd {
+	return func() tea.Msg {
+		return RefreshMsg{Force: force}
+	}
+}
+
+// StatusTickCmd returns a command that sends a StatusTickMsg
+func StatusTickCmd() tea.Cmd {
+	return tea.Tick(time.Second*2, func(t time.Time) tea.Msg {
+		return StatusTickMsg(t)
+	})
+}
+
+// ErrorCmd returns a command that sends an ErrorMsg
+func ErrorCmd(err error) tea.Cmd {
+	return func() tea.Msg {
+		return ErrorMsg{Error: err}
+	}
+}
+
+// ExitCmd returns a command that sends an ExitMsg
+func ExitCmd() tea.Cmd {
+	return func() tea.Msg {
+		return ExitMsg{}
+	}
+}
+
+// SearchModeCmd returns a command that changes search mode
+func SearchModeCmd(mode SearchMode) tea.Cmd {
+	return func() tea.Msg {
+		return SearchModeMsg{Mode: mode}
+	}
+}
+
+// PanelFocusCmd returns a command that changes panel focus
+func PanelFocusCmd(panel PanelType) tea.Cmd {
+	return func() tea.Msg {
+		return PanelFocusMsg{Panel: panel}
+	}
+}
+
+// FilterChangedCmd returns a command that sends a FilterChangedMsg
+func FilterChangedCmd(filterText, filterGroup string) tea.Cmd {
+	return func() tea.Msg {
+		return FilterChangedMsg{
+			FilterText:  filterText,
+			FilterGroup: filterGroup,
+		}
+	}
+}
+
+// SortChangedCmd returns a command that sends a SortChangedMsg
+func SortChangedCmd(sortBy SortType) tea.Cmd {
+	return func() tea.Msg {
+		return SortChangedMsg{SortBy: sortBy}
+	}
+}
+
+// HelpToggleCmd returns a command that toggles help
+func HelpToggleCmd() tea.Cmd {
+	return func() tea.Msg {
+		return HelpToggleMsg{}
+	}
+}

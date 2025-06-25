@@ -36,15 +36,28 @@ chmod +x scripts/install.sh
    sudo mv gman /usr/local/bin/
    ```
 
-3. **Setup shell integration**:
+3. **Setup shell integration** (Required for `gman switch`):
+   
+   **⚠️ Important**: The shell integration is **required** for `gman switch` to work properly. Without it, `gman switch` will only output the target path but won't actually change your current directory.
+   
    Add this to your `~/.bashrc` or `~/.zshrc`:
    ```bash
-   # gman Shell Integration
+   # gman Git Repository Manager - Shell Integration
+   # Add gman to PATH (adjust path to your gman binary)
+   export PATH="/usr/local/bin:$PATH"  # if installed via sudo mv
+   # OR for local installation:
+   # export PATH="/path/to/gman/directory:$PATH"
+   
+   # gman wrapper function for directory switching
    gman() {
        local output
+       local exit_code
+
+       # Call the actual gman binary and capture both output and exit code
        output=$(command gman "$@" 2>&1)
-       local exit_code=$?
-       
+       exit_code=$?
+
+       # Check if this is a directory change request
        if [[ "$output" == GMAN_CD:* ]]; then
            local target_dir="${output#GMAN_CD:}"
            if [ -d "$target_dir" ]; then
@@ -55,18 +68,34 @@ chmod +x scripts/install.sh
                return 1
            fi
        else
+           # For all other commands, just print the output
            echo "$output"
        fi
-       
+
        return $exit_code
    }
-   
-   # Enable completion
-   eval "$(gman completion bash)"  # for bash
-   eval "$(gman completion zsh)"   # for zsh
+
+   # Enable gman completion if available
+   if command -v gman &> /dev/null; then
+       eval "$(gman completion bash)"  # for bash
+       eval "$(gman completion zsh)"   # for zsh
+   fi
    ```
 
 4. **Restart your shell** or run `source ~/.bashrc` (or `~/.zshrc`)
+
+5. **Verify installation**:
+   ```bash
+   # Check if gman is available
+   which gman
+   
+   # Test the shell integration
+   gman list
+   
+   # Test directory switching (should actually change directory)
+   gman switch your-repo-alias
+   pwd  # Should show the repository path
+   ```
 
 ## Quick Start
 
@@ -231,6 +260,98 @@ go test ./...
 3. Commit your changes (`git commit -m 'Add some amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+## Troubleshooting
+
+> 📋 **For detailed troubleshooting guide, see [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)**
+
+### `gman switch` doesn't change directory
+
+**Symptom**: When you run `gman switch <repo>`, you see output like `GMAN_CD:/path/to/repo` but your current directory doesn't change.
+
+**Cause**: This happens when the shell integration wrapper function is not properly installed.
+
+**Technical Background**: Go programs (like gman) run as child processes and cannot directly change the parent shell's working directory due to process isolation. The shell wrapper function is required to interpret the `GMAN_CD:` output and execute the `cd` command in the shell.
+
+**Solution**:
+
+1. **Check if gman is in PATH**:
+   ```bash
+   which gman
+   # Should show path to gman binary
+   ```
+
+2. **Check if shell function is loaded**:
+   ```bash
+   type gman
+   # Should show "gman is a function" (not "gman is /path/to/gman")
+   ```
+
+3. **If shell function is missing**, add this to your `~/.zshrc` or `~/.bashrc`:
+   ```bash
+   # gman wrapper function
+   gman() {
+       local output
+       local exit_code
+       output=$(command gman "$@" 2>&1)
+       exit_code=$?
+       if [[ "$output" == GMAN_CD:* ]]; then
+           local target_dir="${output#GMAN_CD:}"
+           if [ -d "$target_dir" ]; then
+               cd "$target_dir"
+               echo "Switched to: $target_dir"
+           else
+               echo "Error: Directory not found: $target_dir" >&2
+               return 1
+           fi
+       else
+           echo "$output"
+       fi
+       return $exit_code
+   }
+   ```
+
+4. **Reload your shell configuration**:
+   ```bash
+   source ~/.zshrc  # or ~/.bashrc
+   ```
+
+5. **Test the fix**:
+   ```bash
+   gman switch <your-repo>
+   pwd  # Should show the repository path
+   ```
+
+### gman command not found
+
+**Solution**: Make sure gman binary is in your PATH:
+
+```bash
+# Option 1: Install to system location
+sudo cp gman /usr/local/bin/
+
+# Option 2: Add to PATH in shell config
+echo 'export PATH="/path/to/gman/directory:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+### Configuration not found
+
+**Solution**: Initialize configuration by adding your first repository:
+
+```bash
+gman add /path/to/your/repo repo-name
+```
+
+The configuration file will be created at `~/.config/gman/config.yml`.
+
+### Permission denied errors
+
+**Solution**: Ensure gman binary has execute permissions:
+
+```bash
+chmod +x /path/to/gman
+```
 
 ## License
 
