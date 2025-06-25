@@ -181,10 +181,8 @@ func TestWorktreeListCommand(t *testing.T) {
 	}
 
 	// Update config to include empty repo
-	if err := createTestConfig(t, configPath, map[string]string{
-		"test-repo":  repoPath,
-		"empty-repo": emptyRepoPath,
-	}); err != nil {
+	configContent := fmt.Sprintf("repositories:\n  test-repo: %s\n  empty-repo: %s\n", repoPath, emptyRepoPath)
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("Failed to update test config: %v", err)
 	}
 
@@ -488,24 +486,4 @@ func createTestWorktree(t *testing.T, repoPath, wtPath, branchName string) error
 	return cmd.Run()
 }
 
-func createTestConfig(t *testing.T, configPath string, repositories map[string]string) error {
-	t.Helper()
-	
-	configDir := filepath.Dir(configPath)
-	if err := os.MkdirAll(configDir, 0755); err != nil {
-		return fmt.Errorf("failed to create config directory: %w", err)
-	}
-
-	config := `repositories:`
-	for alias, path := range repositories {
-		config += fmt.Sprintf("\n  %s: %s", alias, path)
-	}
-	config += "\n"
-
-	if err := os.WriteFile(configPath, []byte(config), 0644); err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
-	}
-
-	return nil
-}
 

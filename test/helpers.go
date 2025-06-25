@@ -12,6 +12,7 @@ import (
 	"gman/internal/config"
 	"gman/internal/di"
 	"gman/pkg/types"
+	"gopkg.in/yaml.v3"
 )
 
 // TestRepository represents a test repository with metadata
@@ -164,13 +165,31 @@ func CreateTestRepository(t *testing.T, repo *TestRepository) error {
 func CreateTestConfig(t *testing.T, configPath string, repos map[string]string, groups ...types.Group) (*TestConfig, error) {
 	t.Helper()
 
+	// Create groups map from slice
+	groupsMap := make(map[string]types.Group)
+	for _, group := range groups {
+		groupsMap[group.Name] = group
+	}
+
 	configMgr := di.ConfigManager()
 	cfg := configMgr.GetConfig()
 	cfg.Repositories = repos
-	cfg.Groups = groups
+	cfg.Groups = groupsMap
 
-	if err := configMgr.SaveToPath(configPath); err != nil {
-		return nil, fmt.Errorf("failed to save config: %w", err)
+	// Write config file directly since we need to specify path
+	configDir := filepath.Dir(configPath)
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	// Save config manually to the specified path
+	yamlData, err := yaml.Marshal(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	if err := os.WriteFile(configPath, yamlData, 0644); err != nil {
+		return nil, fmt.Errorf("failed to write config file: %w", err)
 	}
 
 	return &TestConfig{
@@ -196,13 +215,21 @@ func WithTestConfig(t *testing.T, configPath string, testFunc func(*TestConfig))
 	}()
 
 	configMgr := di.ConfigManager()
-	configMgr.LoadFromPath(configPath)
+	if err := configMgr.Load(); err != nil {
+		t.Fatalf("Failed to load test config: %v", err)
+	}
 	cfg := configMgr.GetConfig()
+
+	// Convert groups map to slice for TestConfig
+	var groups []types.Group
+	for _, group := range cfg.Groups {
+		groups = append(groups, group)
+	}
 
 	testConfig := &TestConfig{
 		Path:         configPath,
 		Repositories: cfg.Repositories,
-		Groups:       cfg.Groups,
+		Groups:       groups,
 		Manager:      configMgr,
 	}
 

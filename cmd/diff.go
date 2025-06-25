@@ -280,6 +280,19 @@ func validateDiffTool(tool string) error {
 		return fmt.Errorf("diff tool name cannot be empty")
 	}
 
+	// Check for dangerous characters that could be used for command injection
+	dangerousChars := []string{";", "|", "&", "$", "`", "(", ")", "<", ">", "\\", "*", "?", "{", "}", "[", "]"}
+	for _, char := range dangerousChars {
+		if strings.Contains(tool, char) {
+			return fmt.Errorf("diff tool contains dangerous character: %s", char)
+		}
+	}
+
+	// Check for null bytes and other control characters
+	if strings.Contains(tool, "\x00") {
+		return fmt.Errorf("diff tool contains null byte")
+	}
+
 	// Whitelist of allowed diff tools
 	allowedTools := map[string]bool{
 		"diff":     true,
@@ -309,15 +322,15 @@ func validateDiffTool(tool string) error {
 		toolBase = strings.TrimSuffix(toolBase, ".exe")
 	}
 
+	// Additional validation: tool name should not be too long (prevent buffer overflow attempts)
+	if len(toolBase) > 50 {
+		return fmt.Errorf("diff tool name is too long (max 50 characters)")
+	}
+
 	// Check if the tool is in the whitelist
 	if !allowedTools[toolBase] {
 		return fmt.Errorf("diff tool '%s' is not in the allowed list. Allowed tools: %v",
 			tool, getAllowedToolsList(allowedTools))
-	}
-
-	// Additional security checks
-	if strings.ContainsAny(tool, "&|;`$(){}[]<>") {
-		return fmt.Errorf("diff tool name contains invalid characters that could be used for command injection")
 	}
 
 	// Check if the tool exists in PATH (if not an absolute path)

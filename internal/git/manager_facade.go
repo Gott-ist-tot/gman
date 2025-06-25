@@ -57,8 +57,16 @@ func (g *GitManager) GetRepoStatus(alias, path string) types.RepoStatus {
 	return g.status.GetRepoStatus(alias, path)
 }
 
+func (g *GitManager) GetRepoStatusNoFetch(alias, path string) types.RepoStatus {
+	return g.status.GetRepoStatusNoFetch(alias, path)
+}
+
 func (g *GitManager) GetAllRepoStatus(repositories map[string]string) ([]types.RepoStatus, error) {
 	return g.status.GetAllRepoStatus(repositories)
+}
+
+func (g *GitManager) GetAllRepoStatusNoFetch(repositories map[string]string) ([]types.RepoStatus, error) {
+	return g.status.GetAllRepoStatusNoFetch(repositories)
 }
 
 func (g *GitManager) IsGitRepository(path string) bool {

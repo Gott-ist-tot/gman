@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -122,7 +121,7 @@ func TestSwitchWithWorktrees(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	repoPath := filepath.Join(tempDir, "test-repo")
-	if err := initSwitchTestRepository(t, repoPath); err != nil {
+	if err := test.InitBasicTestRepository(t, repoPath); err != nil {
 		t.Fatalf("Failed to initialize test repository: %v", err)
 	}
 
@@ -244,7 +243,7 @@ func TestSwitchTargetCollection(t *testing.T) {
 	}
 
 	for alias, path := range repos {
-		if err := initSwitchTestRepository(t, path); err != nil {
+		if err := test.InitBasicTestRepository(t, path); err != nil {
 			t.Fatalf("Failed to initialize %s: %v", alias, err)
 		}
 	}
@@ -321,7 +320,7 @@ func TestSwitchFuzzyMatching(t *testing.T) {
 	}
 
 	for alias, path := range repos {
-		if err := initSwitchTestRepository(t, path); err != nil {
+		if err := test.InitBasicTestRepository(t, path); err != nil {
 			t.Fatalf("Failed to initialize %s: %v", alias, err)
 		}
 	}
@@ -428,7 +427,7 @@ func TestSwitchPerformance(t *testing.T) {
 		path := filepath.Join(tempDir, alias)
 		repos[alias] = path
 
-		if err := initSwitchTestRepository(t, path); err != nil {
+		if err := test.InitBasicTestRepository(t, path); err != nil {
 			t.Fatalf("Failed to initialize %s: %v", alias, err)
 		}
 	}

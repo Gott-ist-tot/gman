@@ -12,6 +12,7 @@ import (
 	"gman/internal/di"
 	"gman/internal/interactive"
 	"gman/pkg/types"
+	"gopkg.in/yaml.v3"
 )
 
 // TestFullWorkflow tests a complete workflow from repository setup to operations
@@ -43,14 +44,14 @@ func TestFullWorkflow(t *testing.T) {
 	cfg.Repositories = repos
 
 	// Add some groups for testing
-	cfg.Groups = []types.Group{
-		{
+	cfg.Groups = map[string]types.Group{
+		"project": {
 			Name:         "project",
 			Description:  "Main project repositories",
 			Repositories: []string{"project-backend", "project-frontend"},
 			CreatedAt:    time.Now(),
 		},
-		{
+		"all": {
 			Name:         "all",
 			Description:  "All repositories",
 			Repositories: []string{"project-backend", "project-frontend", "shared-utils"},
@@ -58,8 +59,14 @@ func TestFullWorkflow(t *testing.T) {
 		},
 	}
 
-	if err := configMgr.SaveToPath(configPath); err != nil {
-		t.Fatalf("Failed to save config: %v", err)
+	// Save config manually to the specified path  
+	yamlData, err := yaml.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("Failed to marshal config: %v", err)
+	}
+	
+	if err := os.WriteFile(configPath, yamlData, 0644); err != nil {
+		t.Fatalf("Failed to write config: %v", err)
 	}
 
 	// Set environment
@@ -69,7 +76,8 @@ func TestFullWorkflow(t *testing.T) {
 	// Test workflow steps
 	t.Run("1. Configuration Loading", func(t *testing.T) {
 		reloadedMgr := di.ConfigManager()
-		reloadedMgr.LoadFromPath(configPath)
+		os.Setenv("GMAN_CONFIG", configPath)
+		reloadedMgr.Load()
 		reloadedCfg := reloadedMgr.GetConfig()
 
 		if len(reloadedCfg.Repositories) != 3 {
@@ -86,14 +94,14 @@ func TestFullWorkflow(t *testing.T) {
 
 		// Test status checking
 		for alias, path := range repos {
-			status, err := gitMgr.GetStatus(path)
-			if err != nil {
-				t.Errorf("Failed to get status for %s: %v", alias, err)
+			status := gitMgr.GetRepoStatus(alias, path)
+			if status.Error != nil {
+				t.Errorf("Failed to get status for %s: %v", alias, status.Error)
 				continue
 			}
 
-			if status.WorkspaceStatus != types.WorkspaceStatusClean {
-				t.Errorf("Expected clean workspace for %s, got %s", alias, status.WorkspaceStatus)
+			if status.Workspace != types.Clean {
+				t.Errorf("Expected clean workspace for %s, got %s", alias, status.Workspace)
 			}
 		}
 	})
@@ -208,9 +216,9 @@ func TestFullWorkflow(t *testing.T) {
 		// Test operations across all configured repositories
 		statusResults := make(map[string]*types.RepoStatus)
 		for alias, path := range cfg.Repositories {
-			status, err := gitMgr.GetStatus(path)
-			if err != nil {
-				t.Errorf("Failed to get status for %s: %v", alias, err)
+			status := gitMgr.GetRepoStatus(alias, path)
+			if status.Error != nil {
+				t.Errorf("Failed to get status for %s: %v", alias, status.Error)
 				continue
 			}
 			statusResults[alias] = status
@@ -222,8 +230,8 @@ func TestFullWorkflow(t *testing.T) {
 
 		// Verify all repositories are in clean state
 		for alias, status := range statusResults {
-			if status.WorkspaceStatus != types.WorkspaceStatusClean {
-				t.Errorf("Repository %s should be clean, got %s", alias, status.WorkspaceStatus)
+			if status.Workspace != types.Clean {
+				t.Errorf("Repository %s should be clean, got %s", alias, status.Workspace)
 			}
 		}
 	})
@@ -259,8 +267,14 @@ func TestConcurrentOperations(t *testing.T) {
 	cfg := configMgr.GetConfig()
 	cfg.Repositories = repos
 
-	if err := configMgr.SaveToPath(configPath); err != nil {
-		t.Fatalf("Failed to save config: %v", err)
+	// Save config manually to the specified path  
+	yamlData, err := yaml.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("Failed to marshal config: %v", err)
+	}
+	
+	if err := os.WriteFile(configPath, yamlData, 0644); err != nil {
+		t.Fatalf("Failed to write config: %v", err)
 	}
 
 	t.Run("concurrent status checks", func(t *testing.T) {
@@ -271,7 +285,7 @@ func TestConcurrentOperations(t *testing.T) {
 
 		for alias, path := range repos {
 			go func(a, p string) {
-				_, err := gitMgr.GetStatus(p)
+				status := gitMgr.GetRepoStatus("test", p)
 				statusChan <- err
 			}(alias, path)
 		}
@@ -338,8 +352,8 @@ func TestErrorRecovery(t *testing.T) {
 	t.Run("non-existent repository", func(t *testing.T) {
 		nonExistentPath := filepath.Join(tempDir, "nonexistent")
 
-		_, err := gitMgr.GetStatus(nonExistentPath)
-		if err == nil {
+		status := gitMgr.GetRepoStatus("test", nonExistentPath)
+		if status.Error == nil {
 			t.Error("Expected error for non-existent repository")
 		}
 	})
@@ -356,8 +370,8 @@ func TestErrorRecovery(t *testing.T) {
 			t.Fatalf("Failed to create fake git dir: %v", err)
 		}
 
-		_, err := gitMgr.GetStatus(corruptedPath)
-		if err == nil {
+		status := gitMgr.GetRepoStatus("test", corruptedPath)
+		if status.Error == nil {
 			t.Error("Expected error for corrupted repository")
 		}
 	})
@@ -420,9 +434,9 @@ func TestPerformanceCharacteristics(t *testing.T) {
 			// Measure status checking performance
 			start := time.Now()
 			for _, path := range repos {
-				_, err := gitMgr.GetStatus(path)
-				if err != nil {
-					t.Errorf("Status check failed: %v", err)
+				status := gitMgr.GetRepoStatus("test", path)
+				if status.Error != nil {
+					t.Errorf("Status check failed: %v", status.Error)
 				}
 			}
 			duration := time.Since(start)
