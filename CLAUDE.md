@@ -6,11 +6,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 gman is a **modern, production-ready** Git repository management CLI tool built in Go. It enables developers to efficiently manage multiple Git repositories with features including status checking, interactive switching, batch operations, shell integration, advanced workflow automation, and comprehensive search capabilities.
 
-**Current Status**: **Stable & Feature-Complete** - All core modernization objectives achieved through Optimization Blueprint v3.0.
+**Current Status**: **Production-Ready & Enhanced** - All modernization objectives completed through Optimization Blueprint v3.0 + Phase 2 Strategic Improvements.
 
-**Latest Updates**: Command structure cleaned up, duplicate commands removed, help text refreshed, all commands verified working, TUI dashboard functional (requires proper terminal environment).
+**Latest Updates**: Revolutionary search system implemented with fd/rg integration, command structure simplified, external tool management added, real-time search capabilities deployed.
 
-## Recent Major Enhancements (Optimization Blueprint v3.0)
+## Major Enhancements Timeline
+
+### Phase 2: Search System Revolution ✅ (December 2024)
+- **P2.1: Command Structure Simplification** - Removed redundant `quick` command group (-77 lines)
+- **P2.2: External Tool Integration** - Comprehensive fd/rg/fzf integration with dependency management  
+- **P2.3: Real-Time Search Implementation** - Replaced SQLite indexing with instant fd-based file search
+- **P2.4: Content Search Capabilities** - Added powerful regex-based content search using ripgrep
+- **P2.5: Modern Architecture** - Modular external tool abstraction with lazy loading and install guidance
+
+### Optimization Blueprint v3.0 ✅ (Completed)
 
 ### P0: Core Stability & Security ✅
 - **P0.1: File Locking System** - Implemented concurrent configuration protection using github.com/gofrs/flock
@@ -66,7 +75,6 @@ gman now features a reorganized command structure with logical grouping and intu
 ### Command Groups
 - **`gman repo` (r)** - Repository management (add, remove, list, groups)
 - **`gman work` (w)** - Git workflow operations (status, sync, commit, push, branch)
-- **`gman quick` (q)** - Quick access to common operations
 - **`gman tools` (t)** - Advanced utilities (dashboard, search, worktree, setup)
 
 ### Usage Examples
@@ -81,13 +89,10 @@ gman work status --extended
 gman w sync --group webdev           # Using shortcut
 gman work commit -m "Fix bug" --add
 
-# Quick access
-gman quick status                    # No nested structure
-gman q switch                        # Direct shortcuts
-
 # Advanced tools
 gman tools dashboard
-gman t find "config.yaml"            # Using shortcut
+gman t find file config.yaml         # Real-time file search
+gman t find content "TODO"           # Content search with ripgrep
 gman tools setup discover ~/Projects
 ```
 
@@ -478,14 +483,86 @@ The project maintains comprehensive test coverage across multiple layers:
 
 **Configuration**: YAML-based with defaults, supports repository aliases, custom sync modes (ff-only, rebase, autostash), recent usage history, and repository groups.
 
+## Phase 2: Search System Revolution - Technical Deep Dive
+
+### 🔍 **Revolutionary Search Architecture**
+The search system has been completely modernized, replacing slow SQLite indexing with real-time external tool integration:
+
+**Before Phase 2:**
+- Manual SQLite file indexing (slow, requires maintenance)
+- No content search capabilities  
+- Index rebuilds needed for accurate results
+- Limited to basic file name matching
+
+**After Phase 2:**
+- **Real-time fd-based file search** (instant, always current)
+- **Powerful ripgrep content search** with regex support
+- **Zero maintenance** - no indexes to rebuild
+- **Concurrent multi-repository search** with proper timeouts
+
+### 🛠️ **External Tool Integration**
+```
+📦 Modern Tool Stack:
+├── fd (file discovery) - Lightning-fast file search
+├── rg (ripgrep) - Regex-powered content search  
+├── fzf (fuzzy finder) - Interactive selection interface
+└── gman - Orchestrates and enhances all tools
+```
+
+### 🚀 **New Search Commands**
+```bash
+# Real-time file search (no indexing needed)
+gman tools find file config.yaml
+gman t find file "*.go" --group backend
+
+# Powerful content search with regex
+gman tools find content "TODO"
+gman t find content "func.*Error" --group frontend
+gman t find content "import.*react"
+
+# Preserved commit search (SQLite-based)
+gman tools find commit "fix bug"
+gman t find commit --group webdev
+```
+
+### 📊 **Performance & Benefits**
+- **⚡ Instant Results**: No waiting for index rebuilds
+- **🎯 Always Current**: Search results reflect real-time file state
+- **🔍 Regex Power**: Full regex support in content search
+- **🌐 Cross-Repository**: Concurrent search across all repositories
+- **📦 Smart Dependencies**: Automatic tool detection with install guidance
+- **💾 Reduced Complexity**: -77 lines of redundant code removed
+
+### 🏗️ **Technical Architecture**
+```
+internal/external/
+├── tools.go          # External tool management and detection
+├── fd_searcher.go     # Real-time file search implementation  
+├── rg_searcher.go     # Content search with ripgrep
+└── (future tools)     # Extensible architecture for new tools
+```
+
+**Key Features:**
+- **Lazy Loading**: Tools loaded only when needed
+- **Dependency Management**: Automatic detection with platform-specific install instructions
+- **Error Handling**: Graceful degradation when tools missing
+- **Concurrent Execution**: Parallel repository search with proper timeouts
+- **Extensible Design**: Easy to add new external tools
+
 ## Dependencies
 
-Key external libraries:
+### Core Libraries
 - `github.com/spf13/cobra` - CLI framework
 - `github.com/spf13/viper` - Configuration management  
 - `github.com/fatih/color` - Colorized output
 - `github.com/olekukonko/tablewriter` - Table formatting
 - `gopkg.in/yaml.v3` - YAML parsing
+
+### External Tools (Optional but Recommended)
+- **fd** - Lightning-fast file search (replaces find)
+- **rg (ripgrep)** - Regex content search across files
+- **fzf** - Interactive fuzzy finder for selections
+- **git** - Core Git operations (required)
 
 ## Testing Strategy
 
@@ -529,13 +606,18 @@ All Phase 1 and Phase 2 features have been successfully implemented:
 
 These enhancements significantly improve batch operation efficiency and provide advanced Git workflow management across multiple repositories.
 
-### Phase 5.0 - 互動體驗重塑：fzf 深度整合 ✅
-- **SQLite 索引系統**: 高效的全文搜索索引，支援文件和提交搜索
-- **深度 fzf 整合**: 無縫的模糊搜索體驗，跨倉庫文件和提交搜索
-- **智能預覽功能**: 即時的文件內容和提交差異預覽
-- **索引管理命令**: 完整的索引生命週期管理 (`gman index rebuild/update/stats/clear`)
-  - `gman find file [pattern] [--group <name>]` - 跨倉庫文件搜索
-  - `gman find commit [pattern] [--group <name>]` - 跨倉庫提交搜索
+### Phase 5.0 - Search System Revolution ✅ (MODERNIZED)
+**Note**: This phase has been completely modernized in December 2024 - see "Phase 2: Search System Revolution" section above.
+
+**Legacy Features Replaced:**
+- ~~SQLite 索引系統~~ → **Real-time fd-based file search**
+- ~~Manual index rebuilds~~ → **Always-current results**
+- ~~Basic file search only~~ → **Powerful regex content search with ripgrep**
+
+**Current Search Commands:**
+- `gman find file [pattern] [--group <name>]` - Lightning-fast file search with fd
+- `gman find content <pattern> [--group <name>]` - Regex content search with rg  
+- `gman find commit [pattern] [--group <name>]` - Enhanced commit search (preserved)
 
 ### Phase 5.2 - TUI Dashboard：統一管理界面 ✅
 - **Bubble Tea TUI 框架**: 現代化的終端用戶界面

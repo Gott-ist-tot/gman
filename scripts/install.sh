@@ -38,8 +38,152 @@ detect_os() {
     case "$(uname -s)" in
         Darwin*)    echo "darwin" ;;
         Linux*)     echo "linux" ;;
+        MINGW*|MSYS*) echo "windows" ;;
         *)          echo "unknown" ;;
     esac
+}
+
+# Detect Linux distribution
+detect_linux_distro() {
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        echo "$ID"
+    elif [ -f /etc/redhat-release ]; then
+        echo "rhel"
+    elif [ -f /etc/debian_version ]; then
+        echo "debian"
+    else
+        echo "unknown"
+    fi
+}
+
+# Check if a command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+# Install external dependencies
+install_dependencies() {
+    local os=$(detect_os)
+    log_info "Installing external dependencies (fd, rg, fzf)..."
+    
+    case "$os" in
+        "darwin")
+            install_dependencies_macos
+            ;;
+        "linux")
+            install_dependencies_linux
+            ;;
+        "windows")
+            install_dependencies_windows
+            ;;
+        *)
+            log_warning "Unsupported OS for automatic dependency installation"
+            log_info "Please install fd, ripgrep, and fzf manually for enhanced search functionality"
+            return 0
+            ;;
+    esac
+}
+
+# Install dependencies on macOS
+install_dependencies_macos() {
+    if command_exists brew; then
+        log_info "Using Homebrew to install dependencies..."
+        brew install fd ripgrep fzf || log_warning "Some dependencies failed to install via Homebrew"
+    elif command_exists port; then
+        log_info "Using MacPorts to install dependencies..."
+        sudo port install fd ripgrep fzf || log_warning "Some dependencies failed to install via MacPorts"
+    else
+        log_warning "Neither Homebrew nor MacPorts found"
+        log_info "Please install Homebrew (https://brew.sh) or MacPorts and run:"
+        log_info "  brew install fd ripgrep fzf"
+        log_info "  # OR"
+        log_info "  sudo port install fd ripgrep fzf"
+    fi
+}
+
+# Install dependencies on Linux
+install_dependencies_linux() {
+    local distro=$(detect_linux_distro)
+    
+    case "$distro" in
+        "ubuntu"|"debian")
+            log_info "Installing dependencies via apt..."
+            sudo apt update
+            sudo apt install -y fd-find ripgrep fzf || log_warning "Some dependencies failed to install"
+            # Ubuntu installs fd as fdfind, create symlink
+            if command_exists fdfind && ! command_exists fd; then
+                sudo ln -sf "$(which fdfind)" /usr/local/bin/fd
+                log_info "Created fd symlink for fdfind"
+            fi
+            ;;
+        "fedora")
+            log_info "Installing dependencies via dnf..."
+            sudo dnf install -y fd-find ripgrep fzf || log_warning "Some dependencies failed to install"
+            ;;
+        "centos"|"rhel")
+            log_info "Installing dependencies via yum (requires EPEL)..."
+            sudo yum install -y epel-release
+            sudo yum install -y fd-find ripgrep fzf || log_warning "Some dependencies failed to install"
+            ;;
+        "arch"|"manjaro")
+            log_info "Installing dependencies via pacman..."
+            sudo pacman -S --noconfirm fd ripgrep fzf || log_warning "Some dependencies failed to install"
+            ;;
+        "opensuse"*)
+            log_info "Installing dependencies via zypper..."
+            sudo zypper install -y fd ripgrep fzf || log_warning "Some dependencies failed to install"
+            ;;
+        *)
+            log_warning "Unsupported Linux distribution: $distro"
+            log_info "Please install fd, ripgrep, and fzf manually using your package manager"
+            ;;
+    esac
+}
+
+# Install dependencies on Windows (MSYS2/Git Bash)
+install_dependencies_windows() {
+    if command_exists pacman; then
+        log_info "Installing dependencies via MSYS2 pacman..."
+        pacman -S --noconfirm mingw-w64-x86_64-fd mingw-w64-x86_64-ripgrep mingw-w64-x86_64-fzf || log_warning "Some dependencies failed to install"
+    elif command_exists winget; then
+        log_info "Installing dependencies via winget..."
+        winget install sharkdp.fd || log_warning "fd installation failed"
+        winget install BurntSushi.ripgrep.MSVC || log_warning "ripgrep installation failed"
+        winget install junegunn.fzf || log_warning "fzf installation failed"
+    else
+        log_warning "Neither MSYS2 nor winget found"
+        log_info "Please install dependencies manually:"
+        log_info "  winget install sharkdp.fd BurntSushi.ripgrep.MSVC junegunn.fzf"
+    fi
+}
+
+# Verify dependencies installation
+verify_dependencies() {
+    log_info "Verifying dependency installation..."
+    local missing_deps=()
+    
+    if ! command_exists fd; then
+        missing_deps+=("fd")
+    fi
+    
+    if ! command_exists rg; then
+        missing_deps+=("rg (ripgrep)")
+    fi
+    
+    if ! command_exists fzf; then
+        missing_deps+=("fzf")
+    fi
+    
+    if [ ${#missing_deps[@]} -eq 0 ]; then
+        log_success "All dependencies are installed and available"
+        return 0
+    else
+        log_warning "Missing dependencies: ${missing_deps[*]}"
+        log_info "gman will work with reduced search functionality"
+        log_info "For full functionality, please install missing dependencies manually"
+        return 1
+    fi
 }
 
 # Check if binary exists
@@ -151,6 +295,35 @@ generate_completions() {
     fi
 }
 
+# Prompt for dependency installation
+prompt_dependency_installation() {
+    echo
+    log_info "External dependencies enhance gman's search capabilities:"
+    echo "  • fd: Lightning-fast file search"
+    echo "  • rg (ripgrep): Powerful content search"
+    echo "  • fzf: Interactive fuzzy finder"
+    echo
+    
+    while true; do
+        read -p "Install external dependencies? [Y/n]: " yn
+        case $yn in
+            [Yy]* | "" )
+                install_dependencies
+                verify_dependencies
+                break
+                ;;
+            [Nn]* )
+                log_info "Skipping dependency installation"
+                log_info "You can install them later using: ./scripts/setup-dependencies.sh"
+                break
+                ;;
+            * )
+                echo "Please answer yes (y) or no (n)."
+                ;;
+        esac
+    done
+}
+
 # Show post-install instructions
 show_instructions() {
     echo
@@ -158,16 +331,72 @@ show_instructions() {
     echo
     echo "Next steps:"
     echo "1. Restart your shell or run: source ~/.bashrc (or ~/.zshrc)"
-    echo "2. Add your first repository: gman add /path/to/repo alias"
-    echo "3. Check status: gman status"
-    echo "4. Switch to repository: gman switch alias"
+    echo "2. Run the setup wizard: gman tools setup"
+    echo "3. Add your first repository: gman repo add /path/to/repo alias"
+    echo "4. Check status: gman work status"
+    echo "5. Switch to repository: gman switch alias"
+    echo
+    echo "Enhanced search commands:"
+    echo "  • gman tools find file <pattern>     # Search for files"
+    echo "  • gman tools find content <pattern>  # Search file contents"
+    echo "  • gman tools dashboard              # Launch TUI dashboard"
     echo
     echo "For help: gman --help"
-    echo "For more information, visit: https://github.com/yourusername/gman"
+    echo "For troubleshooting: see DEPLOYMENT.md"
+}
+
+# Parse command line arguments
+parse_args() {
+    SKIP_DEPS=false
+    AUTO_DEPS=false
+    
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --skip-deps)
+                SKIP_DEPS=true
+                shift
+                ;;
+            --auto-deps)
+                AUTO_DEPS=true
+                shift
+                ;;
+            --help|-h)
+                show_help
+                exit 0
+                ;;
+            *)
+                log_error "Unknown option: $1"
+                show_help
+                exit 1
+                ;;
+        esac
+    done
+}
+
+# Show help
+show_help() {
+    echo "gman Installation Script"
+    echo
+    echo "Usage: $0 [OPTIONS]"
+    echo
+    echo "Options:"
+    echo "  --skip-deps    Skip dependency installation"
+    echo "  --auto-deps    Automatically install dependencies without prompting"
+    echo "  --help, -h     Show this help message"
+    echo
+    echo "This script will:"
+    echo "1. Install the gman binary to /usr/local/bin"
+    echo "2. Set up configuration directory"
+    echo "3. Configure shell integration for directory switching"
+    echo "4. Generate completion scripts"
+    echo "5. Optionally install external dependencies (fd, rg, fzf)"
 }
 
 # Main installation function
 main() {
+    # Parse arguments
+    parse_args "$@"
+    
     log_info "Starting gman installation..."
     echo
     
@@ -188,6 +417,17 @@ main() {
     create_config_dir
     setup_shell_integration
     generate_completions
+    
+    # Handle dependencies
+    if [ "$SKIP_DEPS" = true ]; then
+        log_info "Skipping dependency installation (--skip-deps)"
+    elif [ "$AUTO_DEPS" = true ]; then
+        log_info "Installing dependencies automatically (--auto-deps)"
+        install_dependencies
+        verify_dependencies
+    else
+        prompt_dependency_installation
+    fi
     
     # Show instructions
     show_instructions

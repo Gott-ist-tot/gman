@@ -2,6 +2,10 @@
 
 # gman Shell Integration Script
 # Add this to your ~/.bashrc or ~/.zshrc
+# This script provides:
+# - Directory switching for 'gman switch'
+# - Shell completion for gman commands
+# - Optional dependency checking and installation guidance
 
 # Main gman wrapper function with smart command detection
 gman() {
@@ -52,6 +56,78 @@ elif [ -n "$ZSH_VERSION" ]; then
     fi
 fi
 
+# Dependency checking functions
+gman_check_deps() {
+    local missing_deps=()
+    
+    if ! command -v fd >/dev/null 2>&1; then
+        missing_deps+=("fd")
+    fi
+    
+    if ! command -v rg >/dev/null 2>&1; then
+        missing_deps+=("rg")
+    fi
+    
+    if ! command -v fzf >/dev/null 2>&1; then
+        missing_deps+=("fzf")
+    fi
+    
+    if [ ${#missing_deps[@]} -gt 0 ]; then
+        return 1
+    else
+        return 0
+    fi
+}
+
+gman_show_dep_warning() {
+    local missing_deps=()
+    
+    if ! command -v fd >/dev/null 2>&1; then
+        missing_deps+=("fd")
+    fi
+    
+    if ! command -v rg >/dev/null 2>&1; then
+        missing_deps+=("rg")
+    fi
+    
+    if ! command -v fzf >/dev/null 2>&1; then
+        missing_deps+=("fzf")
+    fi
+    
+    if [ ${#missing_deps[@]} -gt 0 ]; then
+        echo "⚠️  gman: Missing external dependencies for enhanced search: ${missing_deps[*]}" >&2
+        echo "   Install with: ./scripts/setup-dependencies.sh" >&2
+        echo "   Or see: DEPLOYMENT.md for manual installation" >&2
+        return 1
+    fi
+    
+    return 0
+}
+
+# Enhanced gman wrapper with dependency awareness
+gman_enhanced() {
+    # Check if this is a search command that requires external dependencies
+    if [[ "$1" == "tools" && "$2" == "find" ]] || [[ "$1" == "find" ]]; then
+        if ! gman_check_deps; then
+            gman_show_dep_warning
+            echo "" >&2
+            echo "Continuing with basic functionality..." >&2
+        fi
+    fi
+    
+    # Call the main gman function
+    gman "$@"
+}
+
+# Optional: Check dependencies on shell startup
+# Uncomment the following lines to get a one-time warning about missing dependencies
+# when starting a new shell session (only if gman config exists)
+#
+# if [ -f "$HOME/.config/gman/config.yml" ] && ! gman_check_deps >/dev/null 2>&1; then
+#     echo "💡 Tip: Install gman's external dependencies for enhanced search functionality:"
+#     echo "   ./scripts/setup-dependencies.sh"
+# fi
+
 # Optional: Add gman status to your prompt (uncomment to enable)
 # This shows a git-like status indicator for the current repository
 # 
@@ -72,3 +148,7 @@ fi
 # elif [ -n "$ZSH_VERSION" ]; then
 #     PROMPT="${PROMPT}\$(gman_prompt_status)"
 # fi
+
+# Optional: Use enhanced gman with dependency checking
+# Uncomment the following line to enable dependency warnings for search commands:
+# alias gman=gman_enhanced
