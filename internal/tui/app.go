@@ -292,18 +292,44 @@ func (a *App) renderDashboard() string {
 	width := a.state.WindowWidth
 	height := a.state.WindowHeight
 
-	// Calculate panel dimensions for 2x3 layout
-	leftWidth := width/3 - 1
-	middleWidth := width/3 - 1
-	rightWidth := width - leftWidth - middleWidth - 2
-	topHeight := height/2 - 2
-	bottomHeight := height - topHeight - 4
+	// Ensure minimum dimensions
+	if width < 80 {
+		width = 80
+	}
+	if height < 20 {
+		height = 20
+	}
 
-	// Render panels
+	// Calculate panel dimensions for 2x3 layout with proper proportions
+	// Top row: Repository (25%) | Status (35%) | Actions (40%)
+	spacing := 2 // space between panels
+	totalSpacing := spacing * 2 // 2 spaces between 3 panels
+	
+	repoWidth := (width * 25) / 100
+	statusWidth := (width * 35) / 100
+	actionsWidth := width - repoWidth - statusWidth - totalSpacing
+	
+	// Bottom row: Search (60%) | Preview (40%)
+	searchWidth := (width * 60) / 100
+	previewWidth := width - searchWidth - spacing
+	
+	// Heights
+	topHeight := (height * 55) / 100 // Give more space to top row
+	bottomHeight := height - topHeight - 3 // Account for status bar
+	
+	// Debug: Add layout information to help diagnosis (can be removed later)
+	if width < 120 || height < 30 {
+		// For smaller terminals, adjust proportions
+		repoWidth = (width * 30) / 100
+		statusWidth = (width * 40) / 100
+		actionsWidth = width - repoWidth - statusWidth - totalSpacing
+	}
+
+	// Render panels with corrected dimensions
 	repoPanel := a.renderPanel(
 		a.repositoryPanel.View(),
 		"Repositories (1)",
-		leftWidth,
+		repoWidth,
 		topHeight,
 		a.state.FocusedPanel == models.RepositoryPanel,
 	)
@@ -311,7 +337,7 @@ func (a *App) renderDashboard() string {
 	statusPanel := a.renderPanel(
 		a.statusPanel.View(),
 		"Status (2)",
-		middleWidth,
+		statusWidth,
 		topHeight,
 		a.state.FocusedPanel == models.StatusPanel,
 	)
@@ -319,7 +345,7 @@ func (a *App) renderDashboard() string {
 	actionsPanel := a.renderPanel(
 		a.actionsPanel.View(),
 		"Actions (5)",
-		rightWidth,
+		actionsWidth,
 		topHeight,
 		a.state.FocusedPanel == models.ActionsPanel,
 	)
@@ -327,7 +353,7 @@ func (a *App) renderDashboard() string {
 	searchPanel := a.renderPanel(
 		a.searchPanel.View(),
 		"Search (3)",
-		leftWidth+middleWidth+1,
+		searchWidth,
 		bottomHeight,
 		a.state.FocusedPanel == models.SearchPanel,
 	)
@@ -335,25 +361,27 @@ func (a *App) renderDashboard() string {
 	previewPanel := a.renderPanel(
 		a.previewPanel.View(),
 		"Preview (4)",
-		rightWidth,
+		previewWidth,
 		bottomHeight,
 		a.state.FocusedPanel == models.PreviewPanel,
 	)
 
-	// Arrange panels in 2x3 grid
+	// Arrange panels in 2x3 grid with proper spacing
+	spacer := strings.Repeat(" ", spacing)
+	
 	topRow := lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		repoPanel,
-		" ",
+		spacer,
 		statusPanel,
-		" ",
+		spacer,
 		actionsPanel,
 	)
 
 	bottomRow := lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		searchPanel,
-		" ",
+		spacer,
 		previewPanel,
 	)
 
@@ -364,13 +392,19 @@ func (a *App) renderDashboard() string {
 		bottomRow,
 	)
 
-	// Add status bar
+	// Add status bar with layout debug info
 	statusBar := a.renderStatusBar()
+	
+	// Debug layout info (can be removed later)
+	debugInfo := fmt.Sprintf("Layout: W=%d H=%d | Repo=%d Status=%d Actions=%d | Search=%d Preview=%d", 
+		width, height, repoWidth, statusWidth, actionsWidth, searchWidth, previewWidth)
+	debugBar := styles.MutedStyle.Render(debugInfo)
 
 	// Add toasts overlay
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
 		dashboard,
+		debugBar,
 		statusBar,
 	)
 

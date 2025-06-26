@@ -114,7 +114,12 @@ func (r *RepositoryPanel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // View renders the repository panel
 func (r *RepositoryPanel) View() string {
 	if len(r.repos) == 0 {
-		return r.renderEmptyState()
+		// Debug: Always show something so we know the panel is working
+		emptyContent := r.renderEmptyState()
+		if emptyContent == "" {
+			emptyContent = "Repository Panel\n\n🔍 Loading repositories...\n\nPress 'r' to refresh"
+		}
+		return emptyContent
 	}
 
 	var content strings.Builder

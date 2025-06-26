@@ -415,6 +415,14 @@ func CalculatePanelDimensions(totalWidth, totalHeight int) (int, int, int, int) 
 
 // Helper function to create a bordered panel
 func CreatePanel(content string, title string, width, height int, focused bool) string {
+	// Ensure minimum dimensions
+	if width < 10 {
+		width = 10
+	}
+	if height < 5 {
+		height = 5
+	}
+
 	style := PanelStyle
 	titleStyle := PanelTitleStyle
 
@@ -430,10 +438,22 @@ func CreatePanel(content string, title string, width, height int, focused bool) 
 
 	// Create title bar with focus indicator
 	titleText := focusIndicator + title
-	titleBar := titleStyle.Width(width - 2).Render(titleText)
+	titleWidth := width - 4 // Account for borders and padding
+	if titleWidth < 1 {
+		titleWidth = 1
+	}
+	titleBar := titleStyle.Width(titleWidth).Render(titleText)
 
 	// Create content area
-	contentHeight := height - 3 // Account for title and borders
+	contentHeight := height - 4 // Account for title, borders, and spacing
+	if contentHeight < 1 {
+		contentHeight = 1
+	}
+	
+	contentWidth := width - 4 // Account for borders and padding
+	if contentWidth < 1 {
+		contentWidth = 1
+	}
 
 	// Add padding to content if empty or very short
 	if len(content) < 20 {
@@ -441,7 +461,7 @@ func CreatePanel(content string, title string, width, height int, focused bool) 
 	}
 
 	contentArea := style.
-		Width(width).
+		Width(contentWidth).
 		Height(contentHeight).
 		Render(content)
 
