@@ -179,8 +179,13 @@ func TestFullWorkflow(t *testing.T) {
 		}
 
 		// Test switch target collection
+		os.Setenv("GMAN_CONFIG", configPath)
+		defer os.Unsetenv("GMAN_CONFIG")
 		configMgr := di.ConfigManager()
-		configMgr.LoadFromPath(configPath)
+		err := configMgr.Load()
+		if err != nil {
+			t.Fatalf("Failed to load config: %v", err)
+		}
 
 		// This would normally collect both repos and worktrees
 		// We can't easily test the interactive part, but we can test the data structures
@@ -207,8 +212,13 @@ func TestFullWorkflow(t *testing.T) {
 
 	t.Run("6. Cross-Package Integration", func(t *testing.T) {
 		// Test that git manager and config manager work together
+		os.Setenv("GMAN_CONFIG", configPath)
+		defer os.Unsetenv("GMAN_CONFIG")
 		configMgr := di.ConfigManager()
-		configMgr.LoadFromPath(configPath)
+		err := configMgr.Load()
+		if err != nil {
+			t.Fatalf("Failed to load config: %v", err)
+		}
 		cfg := configMgr.GetConfig()
 
 		gitMgr := di.GitManager()
@@ -221,7 +231,7 @@ func TestFullWorkflow(t *testing.T) {
 				t.Errorf("Failed to get status for %s: %v", alias, status.Error)
 				continue
 			}
-			statusResults[alias] = status
+			statusResults[alias] = &status
 		}
 
 		if len(statusResults) != len(cfg.Repositories) {
@@ -286,7 +296,7 @@ func TestConcurrentOperations(t *testing.T) {
 		for alias, path := range repos {
 			go func(a, p string) {
 				status := gitMgr.GetRepoStatus("test", p)
-				statusChan <- err
+				statusChan <- status.Error
 			}(alias, path)
 		}
 
@@ -382,8 +392,10 @@ func TestErrorRecovery(t *testing.T) {
 			t.Fatalf("Failed to create invalid config: %v", err)
 		}
 
+		os.Setenv("GMAN_CONFIG", invalidConfigPath)
+		defer os.Unsetenv("GMAN_CONFIG")
 		configMgr := di.ConfigManager()
-		err := configMgr.LoadFromPath(invalidConfigPath)
+		err := configMgr.Load()
 		if err == nil {
 			t.Error("Expected error for invalid configuration")
 		}

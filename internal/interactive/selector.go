@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"gman/pkg/types"
 
@@ -15,6 +16,7 @@ import (
 // RepositorySelector provides interactive repository selection
 type RepositorySelector struct {
 	repos map[string]string
+	mu    sync.RWMutex
 }
 
 // NewRepositorySelector creates a new repository selector
@@ -24,6 +26,9 @@ func NewRepositorySelector(repos map[string]string) *RepositorySelector {
 
 // SelectRepository displays an interactive menu and returns the selected repository alias
 func (rs *RepositorySelector) SelectRepository() (string, error) {
+	rs.mu.RLock()
+	defer rs.mu.RUnlock()
+	
 	if len(rs.repos) == 0 {
 		return "", fmt.Errorf("no repositories configured")
 	}
@@ -118,6 +123,7 @@ func (rs *RepositorySelector) fuzzyMatch(input string, aliases []string) []strin
 // SwitchTargetSelector provides interactive selection for repositories and worktrees
 type SwitchTargetSelector struct {
 	targets []types.SwitchTarget
+	mu      sync.RWMutex
 }
 
 // NewSwitchTargetSelector creates a new switch target selector
@@ -127,6 +133,9 @@ func NewSwitchTargetSelector(targets []types.SwitchTarget) *SwitchTargetSelector
 
 // SelectTarget displays an interactive menu and returns the selected target
 func (sts *SwitchTargetSelector) SelectTarget() (*types.SwitchTarget, error) {
+	sts.mu.RLock()
+	defer sts.mu.RUnlock()
+	
 	if len(sts.targets) == 0 {
 		return nil, fmt.Errorf("no repositories or worktrees available")
 	}

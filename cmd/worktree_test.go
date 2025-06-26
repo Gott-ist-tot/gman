@@ -181,7 +181,7 @@ func TestWorktreeListCommand(t *testing.T) {
 	}
 
 	// Update config to include empty repo
-	configContent := fmt.Sprintf("repositories:\n  test-repo: %s\n  empty-repo: %s\n", repoPath, emptyRepoPath)
+	configContent = fmt.Sprintf("repositories:\n  test-repo: %s\n  empty-repo: %s\n", repoPath, emptyRepoPath)
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("Failed to update test config: %v", err)
 	}

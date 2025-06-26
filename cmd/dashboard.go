@@ -75,8 +75,8 @@ func runDashboard(cmd *cobra.Command, args []string) error {
 
 	if len(repos) == 0 {
 		fmt.Println("No repositories configured.")
-		fmt.Println("Add repositories with: gman add <alias> <path>")
-		fmt.Println("Or run: gman list to see available commands")
+		fmt.Println("Add repositories with: gman repo add <alias> <path>")
+		fmt.Println("Or run: gman repo list to see available commands")
 		return nil
 	}
 
@@ -85,9 +85,13 @@ func runDashboard(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid theme: %s (available: dark, light)", dashboardFlags.theme)
 	}
 
-	// Set up terminal for TUI
-	if err := setupTerminal(dashboardFlags.force, dashboardFlags.debug); err != nil {
-		return fmt.Errorf("failed to setup terminal: %w", err)
+	// Set up terminal for TUI (only check if not forced)
+	if !dashboardFlags.force {
+		if err := setupTerminal(dashboardFlags.force, dashboardFlags.debug); err != nil {
+			return fmt.Errorf("failed to setup terminal: %w", err)
+		}
+	} else if dashboardFlags.debug {
+		fmt.Println("⚠️  Force flag enabled - bypassing all terminal checks")
 	}
 	defer restoreTerminal()
 
@@ -197,6 +201,18 @@ func isTerminalSuitable(diag TerminalDiagnostics) bool {
 		return true
 	}
 
+	// Enhanced fallback: if TERM is supported, allow even without TTY access
+	// This handles cases like containers, CI environments, or certain SSH sessions
+	if diag.TermSupported && diag.TermEnv != "dumb" {
+		return true
+	}
+
+	// Minimal fallback: if we have any reasonable terminal environment
+	// Allow TUI even with basic terminal detection
+	if diag.TermEnv != "" && diag.TermEnv != "dumb" {
+		return true
+	}
+
 	return false
 }
 
@@ -204,7 +220,7 @@ func isTerminalSuitable(diag TerminalDiagnostics) bool {
 func buildTerminalError(diag TerminalDiagnostics) error {
 	var msg strings.Builder
 
-	msg.WriteString("terminal does not support TUI mode\n\n")
+	msg.WriteString("Terminal does not support TUI mode\n\n")
 
 	if len(diag.DetectedIssues) > 0 {
 		msg.WriteString("Detected issues:\n")
@@ -215,17 +231,25 @@ func buildTerminalError(diag TerminalDiagnostics) error {
 	}
 
 	if len(diag.Suggestions) > 0 {
-		msg.WriteString("Suggestions:\n")
+		msg.WriteString("Environment-specific solutions:\n")
 		for _, suggestion := range diag.Suggestions {
 			msg.WriteString(fmt.Sprintf("  • %s\n", suggestion))
 		}
 		msg.WriteString("\n")
 	}
 
-	msg.WriteString("You can also:\n")
-	msg.WriteString("  • Use --force to bypass these checks\n")
+	// Add common environment-specific guidance
+	msg.WriteString("Common solutions by environment:\n")
+	msg.WriteString("  • SSH: Use 'ssh -t user@host' to allocate a proper TTY\n")
+	msg.WriteString("  • VS Code: Open a real terminal instead of the integrated terminal\n")
+	msg.WriteString("  • tmux/screen: Make sure session has proper TTY allocation\n")
+	msg.WriteString("  • Docker: Run with 'docker run -it' to enable interactive mode\n")
+	msg.WriteString("  • CI/CD: TUI mode is not recommended in automated environments\n\n")
+
+	msg.WriteString("Quick options:\n")
+	msg.WriteString("  • Use --force to attempt TUI mode anyway\n")
 	msg.WriteString("  • Use --debug to see detailed diagnostic information\n")
-	msg.WriteString("  • Continue using CLI commands: gman status, gman list, etc.\n")
+	msg.WriteString("  • Continue using CLI commands: gman repo list, gman work status, etc.\n")
 
 	return fmt.Errorf("%s", msg.String())
 }

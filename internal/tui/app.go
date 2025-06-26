@@ -599,14 +599,48 @@ func (a *App) updatePreviewFromSearch(result models.SearchResultItem) tea.Cmd {
 func Run(configMgr *config.Manager) error {
 	app := NewApp(configMgr)
 
-	// Create the tea program
-	p := tea.NewProgram(
-		app,
-		tea.WithAltScreen(),       // Use alternate screen buffer
-		tea.WithMouseCellMotion(), // Enable mouse support
-	)
+	// Create the tea program with adaptive options based on terminal capabilities
+	options := []tea.ProgramOption{}
+	
+	// Try to detect if we can use advanced terminal features
+	if canUseAdvancedTUI() {
+		options = append(options,
+			tea.WithAltScreen(),       // Use alternate screen buffer
+			tea.WithMouseCellMotion(), // Enable mouse support
+		)
+	} else {
+		// Fallback mode: use basic terminal features
+		options = append(options,
+			tea.WithInput(os.Stdin),   // Use stdin directly
+			tea.WithOutput(os.Stdout), // Use stdout directly
+		)
+	}
+
+	p := tea.NewProgram(app, options...)
 
 	// Run the program
 	_, err := p.Run()
 	return err
+}
+
+// canUseAdvancedTUI checks if advanced TUI features are available
+func canUseAdvancedTUI() bool {
+	// Check if stdout is a TTY
+	if fileInfo, _ := os.Stdout.Stat(); (fileInfo.Mode() & os.ModeCharDevice) == 0 {
+		return false
+	}
+
+	// Check if we can access /dev/tty
+	if tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0); err == nil {
+		tty.Close()
+		return true
+	}
+
+	// Check TERM environment for basic compatibility
+	term := os.Getenv("TERM")
+	if term == "" || term == "dumb" {
+		return false
+	}
+
+	return false // Default to fallback mode for safety
 }

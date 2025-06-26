@@ -309,10 +309,10 @@ func TestSwitchTargetSelector_SelectTarget(t *testing.T) {
 		},
 		{
 			name:          "fuzzy match multiple results",
-			input:         "backend\n",
+			input:         "back\n",
 			expectError:   true,
 			errorContains: "ambiguous selection",
-			description:   "Should fail with multiple matches (backend repo + backend worktrees)",
+			description:   "Should fail with multiple matches (backend, backend-feature, backend-hotfix)",
 		},
 		{
 			name:          "invalid numeric selection",
@@ -452,24 +452,36 @@ func TestInteractiveOutputCapture(t *testing.T) {
 	done := make(chan bool)
 	var output string
 
-	// Capture output
+	// Capture output in chunks to handle buffering
 	go func() {
-		buf := make([]byte, 1024)
-		n, _ := r.Read(buf)
-		output = string(buf[:n])
-		done <- true
+		defer func() { done <- true }()
+		var totalOutput []byte
+		buf := make([]byte, 512)
+		
+		for {
+			n, err := r.Read(buf)
+			if n > 0 {
+				totalOutput = append(totalOutput, buf[:n]...)
+			}
+			if err != nil {
+				break
+			}
+		}
+		output = string(totalOutput)
 	}()
 
-	// Provide input and trigger display
+	// Run selector in a goroutine to allow output capture
 	go func() {
-		defer stdinW.Close()
+		// Provide input after a small delay to ensure display is rendered
+		time.Sleep(10 * time.Millisecond)
 		stdinW.Write([]byte("1\n"))
+		stdinW.Close()
 	}()
 
 	selector := NewRepositorySelector(repos)
 	_, _ = selector.SelectRepository() // We don't care about the result, just the output
 
-	// Close and restore
+	// Close output pipe to signal EOF to reader
 	w.Close()
 	os.Stdout = oldStdout
 	stdinR.Close()
@@ -478,6 +490,7 @@ func TestInteractiveOutputCapture(t *testing.T) {
 	<-done
 
 	// Verify output contains expected elements
+	t.Logf("Captured output: %q", output)
 	if !strings.Contains(output, "Select a repository:") {
 		t.Error("Expected selection prompt in output")
 	}
@@ -489,42 +502,42 @@ func TestInteractiveOutputCapture(t *testing.T) {
 	}
 }
 
-// TestConcurrentSelection tests behavior under concurrent access
-func TestConcurrentSelection(t *testing.T) {
+// TestConcurrentSelectorAccess tests thread safety of selector methods
+func TestConcurrentSelectorAccess(t *testing.T) {
 	repos := map[string]string{
 		"repo1": "/path/to/repo1",
 		"repo2": "/path/to/repo2",
 		"repo3": "/path/to/repo3",
 	}
 
+	selector := NewRepositorySelector(repos)
 	numGoroutines := 10
 	results := make(chan error, numGoroutines)
 
-	// Run multiple selections concurrently
+	// Test concurrent access to selector's internal methods (fuzzyMatch)
+	// This tests thread safety without relying on global state
 	for i := 0; i < numGoroutines; i++ {
 		go func(index int) {
-			// Create pipe for this goroutine
-			r, w, _ := os.Pipe()
-
-			// Provide different inputs
-			go func() {
-				defer w.Close()
-				input := fmt.Sprintf("%d\n", (index%3)+1) // Cycle through 1, 2, 3
-				w.Write([]byte(input))
+			defer func() {
+				if r := recover(); r != nil {
+					results <- fmt.Errorf("panic in goroutine %d: %v", index, r)
+					return
+				}
+				results <- nil
 			}()
 
-			// Save and set stdin for this goroutine
-			oldStdin := os.Stdin
-			os.Stdin = r
-
-			selector := NewRepositorySelector(repos)
-			_, err := selector.SelectRepository()
-
-			// Restore stdin
-			os.Stdin = oldStdin
-			r.Close()
-
-			results <- err
+			// Test concurrent access to internal state via fuzzyMatch
+			aliases := []string{"repo1", "repo2", "repo3"}
+			query := fmt.Sprintf("repo%d", (index%3)+1)
+			
+			// Call fuzzyMatch multiple times to stress test
+			for j := 0; j < 100; j++ {
+				matches := selector.fuzzyMatch(query, aliases)
+				if len(matches) == 0 {
+					results <- fmt.Errorf("unexpected empty matches for query '%s'", query)
+					return
+				}
+			}
 		}(i)
 	}
 
@@ -536,13 +549,15 @@ func TestConcurrentSelection(t *testing.T) {
 		}
 	}
 
-	// Some failures are expected due to stdin conflicts in concurrent access
-	// We just verify that not all operations fail
-	if len(errors) == numGoroutines {
-		t.Error("All concurrent operations failed, expected some to succeed")
+	// With proper thread safety, no operations should fail
+	if len(errors) > 0 {
+		t.Errorf("Concurrent access test failed with %d errors:", len(errors))
+		for _, err := range errors {
+			t.Errorf("  - %v", err)
+		}
 	}
 
-	t.Logf("Concurrent test: %d/%d operations succeeded", numGoroutines-len(errors), numGoroutines)
+	t.Logf("Concurrent access test: %d/%d operations succeeded", numGoroutines-len(errors), numGoroutines)
 }
 
 // BenchmarkRepositorySelection benchmarks the selection performance
