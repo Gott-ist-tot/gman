@@ -4,6 +4,7 @@ A powerful CLI tool for managing multiple Git repositories efficiently. Built wi
 
 ## Features
 
+### Core Capabilities
 - 🚀 **Fast and Concurrent**: Built with Go, supports parallel operations across repositories
 - 📊 **Visual Status**: Colorized table display showing repository status at a glance
 - 🔄 **Quick Switching**: Instantly switch between repository directories
@@ -12,35 +13,69 @@ A powerful CLI tool for managing multiple Git repositories efficiently. Built wi
 - 🎯 **Auto-completion**: Tab completion for commands and repository aliases
 - 🛠 **Configurable**: YAML-based configuration with sensible defaults
 
+### Enhanced Search System (Phase 2)
+- 🔍 **Lightning-Fast File Search**: Real-time file discovery using `fd` across all repositories
+- 🔎 **Powerful Content Search**: Regex-powered text search using `ripgrep` with instant results
+- 🎛️ **Interactive Selection**: Fuzzy finder (`fzf`) integration for intuitive selection
+- 📱 **TUI Dashboard**: Modern terminal interface with live search and repository management
+- 🏷️ **Group-Based Operations**: Organize repositories into groups for targeted operations
+
 ## Installation
 
-### Quick Install (if binary is available)
+### Automated Installation (Recommended)
+
+For the complete setup with external dependencies and shell integration:
 
 ```bash
-# Make the install script executable and run it
-chmod +x scripts/install.sh
+# Clone and build
+git clone <repository-url>
+cd gman
+go build -o gman .
+
+# Run automated installation (includes fd, rg, fzf)
 ./scripts/install.sh
 ```
 
-### Manual Installation
+### Quick Manual Installation
 
-1. **Build from source**:
-   ```bash
-   git clone <repository-url>
-   cd gman
-   go build -o gman
-   ```
+```bash
+# Build and install binary only
+go build -o gman .
+sudo mv gman /usr/local/bin/
 
-2. **Move to PATH**:
-   ```bash
-   sudo mv gman /usr/local/bin/
-   ```
+# Setup shell integration
+source scripts/shell-integration.sh
+```
 
-3. **Setup shell integration** (Required for `gman switch`):
-   
-   **⚠️ Important**: The shell integration is **required** for `gman switch` to work properly. Without it, `gman switch` will only output the target path but won't actually change your current directory.
-   
-   Add this to your `~/.bashrc` or `~/.zshrc`:
+> 📋 **For detailed installation instructions, troubleshooting, and platform-specific guidance, see [DEPLOYMENT.md](DEPLOYMENT.md)**
+
+### External Dependencies
+
+gman's enhanced search features require external tools:
+
+- **fd**: Lightning-fast file search
+- **ripgrep (rg)**: Powerful content search  
+- **fzf**: Interactive fuzzy finder
+
+Install automatically:
+```bash
+./scripts/setup-dependencies.sh
+```
+
+Or install manually based on your platform - see [DEPLOYMENT.md](DEPLOYMENT.md) for details.
+
+### Shell Integration Setup
+
+**⚠️ Critical**: Shell integration is **required** for `gman switch` to work properly. Without it, `gman switch` will only output the target path but won't actually change your current directory.
+
+**Automatic Setup**: The installation script handles this automatically, or you can source the integration manually:
+
+```bash
+# Add to ~/.bashrc or ~/.zshrc
+source ~/.config/gman/shell-integration.sh
+```
+
+**Manual Setup**: Add this to your `~/.bashrc` or `~/.zshrc`:
    ```bash
    # gman Git Repository Manager - Shell Integration
    # Add gman to PATH (adjust path to your gman binary)
@@ -99,46 +134,66 @@ chmod +x scripts/install.sh
 
 ## Quick Start
 
-1. **Add your first repository**:
+1. **Setup gman with the interactive wizard**:
    ```bash
-   gman add /path/to/your/repo my-project
+   gman tools setup
+   ```
+
+2. **Add your first repository**:
+   ```bash
+   gman repo add /path/to/your/repo my-project
    # or add current directory
-   gman add . current-project
+   gman repo add . current-project
    ```
 
-2. **Check status**:
+3. **Check status across all repositories**:
    ```bash
-   gman status
+   gman work status
+   # or extended view with details
+   gman work status --extended
    ```
 
-3. **Switch to a repository**:
+4. **Search for files across repositories**:
+   ```bash
+   gman tools find file config.yaml
+   gman tools find content "TODO"
+   ```
+
+5. **Switch to a repository**:
    ```bash
    gman switch my-project
    ```
 
-4. **Sync all repositories**:
+6. **Launch the interactive dashboard**:
    ```bash
-   gman sync
+   gman tools dashboard
    ```
 
 ## Commands
 
-### Core Commands
+gman uses a modern, organized command structure with logical grouping:
 
-- **`gman status`** - Show status of all repositories
-- **`gman switch <alias>`** - Switch to repository directory
-- **`gman list`** - List all configured repositories
-- **`gman sync`** - Synchronize all repositories with remotes
+### Repository Management (`gman repo` or `gman r`)
+- **`gman repo add [path] [alias]`** - Add a repository
+- **`gman repo remove <alias>`** - Remove a repository from configuration
+- **`gman repo list`** - List all configured repositories
+- **`gman repo group create <name> <repos...>`** - Create repository groups
 
-### Repository Management
+### Git Workflow (`gman work` or `gman w`)
+- **`gman work status [--extended]`** - Show status of all repositories
+- **`gman work sync [--group <name>]`** - Synchronize repositories with remotes
+- **`gman work commit -m "message" [--add]`** - Commit changes across repositories
+- **`gman work push [--group <name>]`** - Push changes to remotes
 
-- **`gman add [path] [alias]`** - Add a repository
-- **`gman remove <alias>`** - Remove a repository from configuration
+### Enhanced Search & Tools (`gman tools` or `gman t`)
+- **`gman tools find file <pattern>`** - Lightning-fast file search across repos
+- **`gman tools find content <pattern>`** - Powerful content search with regex
+- **`gman tools dashboard`** - Launch interactive TUI dashboard
+- **`gman tools setup`** - Interactive setup wizard
 
-### Utility Commands
-
-- **`gman completion [bash|zsh|fish|powershell]`** - Generate completion scripts
-- **`gman help`** - Show help information
+### Quick Operations
+- **`gman switch <alias>`** - Switch to repository directory (requires shell integration)
+- **`gman recent`** - Show recently accessed repositories
 
 ## Examples
 
@@ -146,38 +201,62 @@ chmod +x scripts/install.sh
 
 ```bash
 # Add current directory with auto-generated alias
-gman add
+gman repo add
 
-# Add specific path with auto-generated alias
-gman add /home/user/projects/webapp
+# Add specific path with auto-generated alias  
+gman repo add /home/user/projects/webapp
 
 # Add with custom alias
-gman add /home/user/projects/api backend-api
-gman add . frontend-app
+gman repo add /home/user/projects/api backend-api
+gman repo add . frontend-app
+
+# Create repository groups
+gman repo group create webdev frontend-app backend-api
+gman repo group create tools cli-utils monitoring
 ```
 
 ### Viewing Status
 
 ```bash
-$ gman status
+$ gman work status
 Alias       Branch   Workspace      Sync Status     
 ─────────── ──────── ─────────────── ────────────────
 * backend   main     🟢 CLEAN       ✅ UP-TO-DATE   
   frontend  develop  🔴 DIRTY       ↑ 2 AHEAD      
   infra     main     🟡 STASHED     ↓ 1 BEHIND     
+
+# Extended view with file counts and commit times
+$ gman work status --extended
 ```
 
-### Syncing Repositories
+### Enhanced Search Examples
 
 ```bash
-# Default sync (fast-forward only)
-gman sync
+# Search for files across all repositories
+gman tools find file config.yaml
+gman tools find file "*.go" --group backend
 
-# Sync with rebase
-gman sync --rebase
+# Search content with regex patterns
+gman tools find content "TODO.*urgent"
+gman tools find content "func.*Error" --group frontend
 
-# Sync with autostash
-gman sync --autostash
+# Interactive dashboard with live search
+gman tools dashboard
+```
+
+### Batch Operations
+
+```bash
+# Sync repositories (with modern options)
+gman work sync                    # All repositories
+gman work sync --group webdev     # Specific group only
+gman work sync --only-dirty       # Only repositories with changes
+
+# Commit changes across repositories
+gman work commit -m "Update dependencies" --add --group webdev
+
+# Push changes
+gman work push --group webdev
 ```
 
 ## Configuration
@@ -190,14 +269,23 @@ repositories:
   frontend-app: /home/user/projects/frontend
   infrastructure: /home/user/projects/infra
 
+groups:
+  webdev:
+    name: "Web Development"
+    description: "Frontend and backend projects"
+    repositories: ["frontend-app", "backend-api"]
+    created: "2024-01-15T10:30:00Z"
+
 settings:
   parallel_jobs: 5
   show_last_commit: true
   default_sync_mode: "ff-only"
 
-command_aliases:
-  update: sync --rebase --autostash
-  clean: run "git gc --prune=now"
+recent:
+  - alias: "backend-api"
+    last_accessed: "2024-01-15T14:30:00Z"
+  - alias: "frontend-app"
+    last_accessed: "2024-01-15T14:25:00Z"
 ```
 
 ### Configuration Options
@@ -205,6 +293,53 @@ command_aliases:
 - **`parallel_jobs`**: Number of concurrent operations (default: 5)
 - **`show_last_commit`**: Show last commit in status (default: true)
 - **`default_sync_mode`**: Default sync mode - "ff-only", "rebase", or "autostash" (default: "ff-only")
+- **`groups`**: Repository groups for organized batch operations
+- **`recent`**: Automatically tracked recent repository access
+
+## Enhanced Search System (Phase 2)
+
+gman's Phase 2 revolution brings powerful search capabilities that transform multi-repository management:
+
+### Real-Time File Search
+- **Powered by `fd`**: Lightning-fast file discovery across all repositories
+- **Smart filtering**: Exclude .git, node_modules, build directories automatically
+- **Pattern matching**: Support for glob patterns and regex
+- **Interactive selection**: fzf integration for intuitive file selection
+
+```bash
+gman tools find file config.yaml       # Find specific files
+gman tools find file "*.go" --group backend  # Pattern search in groups
+```
+
+### Content Search
+- **Powered by `ripgrep`**: Ultra-fast text search with regex support
+- **Context-aware**: Shows surrounding lines for better understanding
+- **Multi-repository**: Search across all repositories simultaneously
+- **Respect .gitignore**: Honors repository ignore patterns
+
+```bash
+gman tools find content "TODO.*urgent"     # Regex patterns
+gman tools find content "import.*axios"    # Find imports
+```
+
+### Interactive Dashboard
+- **Modern TUI**: Built with Bubble Tea for responsive terminal interface
+- **Live search**: Real-time file and content search with preview
+- **Repository management**: Status monitoring and quick operations
+- **Keyboard navigation**: Vim-style shortcuts and intuitive controls
+
+```bash
+gman tools dashboard                    # Launch TUI
+```
+
+### Dependencies
+
+The search system requires external tools:
+- **fd**: File search engine
+- **ripgrep**: Content search engine  
+- **fzf**: Interactive fuzzy finder
+
+Install automatically: `./scripts/setup-dependencies.sh`
 
 ## Sync Modes
 
@@ -263,95 +398,71 @@ go test ./...
 
 ## Troubleshooting
 
-> 📋 **For detailed troubleshooting guide, see [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)**
+> 📋 **For comprehensive troubleshooting, installation guides, and platform-specific instructions, see:**
+> - **[DEPLOYMENT.md](DEPLOYMENT.md)** - Complete installation and setup guide
+> - **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** - Detailed troubleshooting guide
 
-### `gman switch` doesn't change directory
+### Quick Fixes
 
-**Symptom**: When you run `gman switch <repo>`, you see output like `GMAN_CD:/path/to/repo` but your current directory doesn't change.
+#### `gman switch` doesn't change directory
 
-**Cause**: This happens when the shell integration wrapper function is not properly installed.
+**Symptom**: You see `GMAN_CD:/path/to/repo` but directory doesn't change.
 
-**Technical Background**: Go programs (like gman) run as child processes and cannot directly change the parent shell's working directory due to process isolation. The shell wrapper function is required to interpret the `GMAN_CD:` output and execute the `cd` command in the shell.
-
-**Solution**:
-
-1. **Check if gman is in PATH**:
-   ```bash
-   which gman
-   # Should show path to gman binary
-   ```
-
-2. **Check if shell function is loaded**:
-   ```bash
-   type gman
-   # Should show "gman is a function" (not "gman is /path/to/gman")
-   ```
-
-3. **If shell function is missing**, add this to your `~/.zshrc` or `~/.bashrc`:
-   ```bash
-   # gman wrapper function
-   gman() {
-       local output
-       local exit_code
-       output=$(command gman "$@" 2>&1)
-       exit_code=$?
-       if [[ "$output" == GMAN_CD:* ]]; then
-           local target_dir="${output#GMAN_CD:}"
-           if [ -d "$target_dir" ]; then
-               cd "$target_dir"
-               echo "Switched to: $target_dir"
-           else
-               echo "Error: Directory not found: $target_dir" >&2
-               return 1
-           fi
-       else
-           echo "$output"
-       fi
-       return $exit_code
-   }
-   ```
-
-4. **Reload your shell configuration**:
-   ```bash
-   source ~/.zshrc  # or ~/.bashrc
-   ```
-
-5. **Test the fix**:
-   ```bash
-   gman switch <your-repo>
-   pwd  # Should show the repository path
-   ```
-
-### gman command not found
-
-**Solution**: Make sure gman binary is in your PATH:
-
+**Solution**: Shell integration not installed. Run:
 ```bash
-# Option 1: Install to system location
-sudo cp gman /usr/local/bin/
-
-# Option 2: Add to PATH in shell config
-echo 'export PATH="/path/to/gman/directory:$PATH"' >> ~/.zshrc
-source ~/.zshrc
+source ~/.config/gman/shell-integration.sh
+# OR add to ~/.bashrc or ~/.zshrc
 ```
 
-### Configuration not found
+#### Search commands not working
 
-**Solution**: Initialize configuration by adding your first repository:
+**Symptom**: `gman tools find` commands fail or show warnings.
 
+**Solution**: Install external dependencies:
 ```bash
-gman add /path/to/your/repo repo-name
+./scripts/setup-dependencies.sh
+# OR see DEPLOYMENT.md for manual installation
 ```
 
-The configuration file will be created at `~/.config/gman/config.yml`.
+#### TUI dashboard not launching
 
-### Permission denied errors
+**Symptom**: `gman tools dashboard` fails or displays incorrectly.
 
-**Solution**: Ensure gman binary has execute permissions:
-
+**Solution**: Check terminal compatibility:
 ```bash
-chmod +x /path/to/gman
+gman tools dashboard --debug
+# Use SSH with TTY: ssh -t user@host
 ```
+
+#### Command not found
+
+**Solution**: Ensure gman is in PATH:
+```bash
+# Check installation
+which gman
+
+# Install to system location
+sudo mv gman /usr/local/bin/
+
+# OR add to PATH
+export PATH="/path/to/gman:$PATH"
+```
+
+#### Configuration issues
+
+**Solution**: Initialize with setup wizard:
+```bash
+gman tools setup
+# OR manually add first repository
+gman repo add /path/to/repo repo-name
+```
+
+### Getting Help
+
+1. **Installation Issues**: See [DEPLOYMENT.md](DEPLOYMENT.md)
+2. **Command Usage**: Run `gman --help` or `gman <command> --help`
+3. **Search Problems**: Run `./scripts/setup-dependencies.sh --verify-only`
+4. **Advanced Troubleshooting**: See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
 
 ## License
 
