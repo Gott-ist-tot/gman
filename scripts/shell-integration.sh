@@ -3,31 +3,40 @@
 # gman Shell Integration Script
 # Add this to your ~/.bashrc or ~/.zshrc
 
-# Main gman wrapper function
+# Main gman wrapper function with smart command detection
 gman() {
-    local output
-    local exit_code
-
-    # Call the actual gman binary and capture both output and exit code
-    output=$(command gman "$@" 2>&1)
-    exit_code=$?
-
-    # Check if this is a directory change request
-    if [[ "$output" == GMAN_CD:* ]]; then
-        local target_dir="${output#GMAN_CD:}"
-        if [ -d "$target_dir" ]; then
-            cd "$target_dir"
-            echo "Switched to: $target_dir"
+    # Check if the first argument is 'switch' or its aliases
+    if [[ "$1" == "switch" || "$1" == "sw" || "$1" == "cd" ]]; then
+        local output gman_cd_line
+        # For switch commands, capture output to handle GMAN_CD
+        output=$(command gman "$@" 2>&1)
+        local exit_code=$?
+        
+        # Extract GMAN_CD line while preserving other output (like warnings)
+        gman_cd_line=$(echo "$output" | grep "^GMAN_CD:")
+        
+        if [[ -n "$gman_cd_line" ]]; then
+            local target_dir="${gman_cd_line#GMAN_CD:}"
+            # Print all non-GMAN_CD output first (warnings, messages, etc.)
+            echo "$output" | grep -v "^GMAN_CD:" | grep -v "^$"
+            
+            if [ -d "$target_dir" ]; then
+                cd "$target_dir"
+                echo "Switched to: $target_dir"
+            else
+                echo "Error: Directory not found: $target_dir" >&2
+                return 1
+            fi
         else
-            echo "Error: Directory not found: $target_dir" >&2
-            return 1
+            # If switch failed, print the error output
+            echo "$output"
         fi
+        return $exit_code
     else
-        # For all other commands, just print the output
-        echo "$output"
+        # For all other commands (including dashboard), execute directly without capturing
+        # This allows interactive commands like dashboard to work properly
+        command gman "$@"
     fi
-
-    return $exit_code
 }
 
 # Enable bash completion for gman
