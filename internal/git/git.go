@@ -900,8 +900,20 @@ func (g *Manager) AddWorktree(repoPath, worktreePath, branch string) error {
 		return fmt.Errorf("path '%s' already exists", worktreePath)
 	}
 
-	// Create the worktree
-	_, err := g.RunCommand(repoPath, "worktree", "add", worktreePath, branch)
+	// Check if branch exists, if not create it with worktree
+	branchExists := g.verifyBranchExists(repoPath, branch) == nil
+	
+	var cmd []string
+	if branchExists {
+		// Branch exists, create worktree for existing branch
+		cmd = []string{"worktree", "add", worktreePath, branch}
+	} else {
+		// Branch doesn't exist, create new branch with worktree
+		cmd = []string{"worktree", "add", "-b", branch, worktreePath}
+	}
+	
+	args := append([]string{cmd[0]}, cmd[1:]...)
+	_, err := g.RunCommand(repoPath, args...)
 	if err != nil {
 		return fmt.Errorf("failed to create worktree: %w", err)
 	}

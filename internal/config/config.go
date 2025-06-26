@@ -87,6 +87,17 @@ func (m *Manager) Load() error {
 
 // GetConfig returns the current configuration
 func (m *Manager) GetConfig() *types.Config {
+	if m.config == nil {
+		m.config = &types.Config{
+			Repositories: make(map[string]string),
+			Groups:       make(map[string]types.Group),
+			RecentUsage:  make([]types.RecentEntry, 0),
+			Settings: types.Settings{
+				DefaultSyncMode: "ff-only",
+				ParallelJobs:    5,
+			},
+		}
+	}
 	return m.config
 }
 
