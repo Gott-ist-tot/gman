@@ -3,6 +3,7 @@ package external
 import (
 	"fmt"
 	"os/exec"
+	"runtime"
 	"strings"
 )
 
@@ -126,8 +127,14 @@ func GetMissingToolsMessage(tools ...*Tool) string {
 
 // getPlatform returns a simplified platform string
 func getPlatform() string {
-	// This is a simplified implementation
-	// In a production system, you might want to use runtime.GOOS
-	// and more sophisticated platform detection
-	return "darwin" // For now, since we're on macOS
+	switch runtime.GOOS {
+	case "darwin":
+		return "darwin"
+	case "linux":
+		return "linux"
+	case "windows":
+		return "windows"
+	default:
+		return "linux" // Default fallback to linux for other Unix-like systems
+	}
 }

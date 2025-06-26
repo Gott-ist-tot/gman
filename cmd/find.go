@@ -41,8 +41,8 @@ Examples:
 var findFileCmd = &cobra.Command{
 	Use:   "file [initial_pattern]",
 	Short: "Search for files across repositories",
-	Long: `Search for files across all managed repositories using fuzzy search.
-Files are indexed for fast searching. The search supports fuzzy matching
+	Long: `Search for files across all managed repositories using real-time search.
+Uses fd for lightning-fast file discovery across repositories. The search supports fuzzy matching
 and provides real-time preview of file contents.
 
 Examples:
