@@ -1,10 +1,12 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -29,6 +31,9 @@ type App struct {
 	// UI state
 	ready    bool
 	quitting bool
+	
+	// Tea program for sending async messages
+	teaProgram *tea.Program
 }
 
 // NewApp creates a new TUI application
@@ -45,6 +50,11 @@ func NewApp(configMgr *config.Manager) *App {
 		ready:           false,
 		quitting:        false,
 	}
+}
+
+// SetTeaProgram sets the tea program reference for async messaging
+func (a *App) SetTeaProgram(p *tea.Program) {
+	a.teaProgram = p
 }
 
 // Init initializes the application
@@ -86,12 +96,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case models.StatusTickMsg:
 		// Refresh repository status periodically
 		cmds = append(cmds, models.StatusTickCmd())
-		if a.state.StatusState.AutoRefresh {
+		if a.state.GetAutoRefresh() {
 			cmds = append(cmds, models.RefreshCmd(false))
 		}
 
 	case models.RepositorySelectedMsg:
-		a.state.SelectedRepo = msg.Alias
+		a.state.SetSelectedRepo(msg.Alias)
 		// Trigger status update for selected repository
 		_, cmd := a.statusPanel.Update(msg)
 		cmds = append(cmds, cmd)
@@ -124,13 +134,27 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case models.SearchResultsMsg:
 		// Handle search results returned from fzf
-		a.state.SearchState.Results = msg.Results
-		a.state.SearchState.Query = msg.Query
-		if len(msg.Results) > 0 {
-			a.state.SearchState.SelectedItem = 0
-			// Update preview with first result
-			cmds = append(cmds, a.updatePreviewFromSearch(msg.Results[0]))
+		if msg.Error != nil {
+			a.state.CompleteSearch(nil, msg.Error)
+		} else {
+			a.state.CompleteSearch(msg.Results, nil)
+			if len(msg.Results) > 0 {
+				// Update preview with first result
+				cmds = append(cmds, a.updatePreviewFromSearch(msg.Results[0]))
+			}
 		}
+
+	case models.SearchStartedMsg:
+		// Search has started - the state was already updated in launchFzfSearch
+		// No additional action needed here
+
+	case models.SearchProgressMsg:
+		// Update search progress
+		a.state.UpdateSearchProgress(msg.Progress, msg.CurrentOp, msg.Partial)
+
+	case models.SearchCancelledMsg:
+		// Search was cancelled
+		a.state.CancelSearch()
 	}
 
 	// Update panels
@@ -419,51 +443,193 @@ func isInputMessage(msg tea.Msg) bool {
 	}
 }
 
-// launchFzfSearch launches an external fzf search process
+// launchFzfSearch launches an asynchronous search operation
 func (a *App) launchFzfSearch(mode models.SearchMode, query string) tea.Cmd {
 	return func() tea.Msg {
-		// Create searcher to get data
-		searcher, err := index.NewSearcher(a.state.ConfigManager)
-		if err != nil {
-			return models.ErrorMsg{Error: fmt.Errorf("failed to create searcher: %w", err)}
-		}
-		defer searcher.Close()
-
-		// Get search results
-		repos := a.state.Repositories
-		var searchResults []index.SearchResult
-
-		switch mode {
-		case models.SearchFiles:
-			searchResults, err = searcher.SearchFiles("", "", repos)
-		case models.SearchCommits:
-			searchResults, err = searcher.SearchCommits("", "", repos)
-		}
-
-		if err != nil {
-			return models.ErrorMsg{Error: fmt.Errorf("search failed: %w", err)}
-		}
-
-		// Convert to TUI search results
-		results := make([]models.SearchResultItem, len(searchResults))
-		for i, result := range searchResults {
-			results[i] = models.SearchResultItem{
-				Type:        result.Type,
-				Repository:  result.RepoAlias,
-				Path:        result.Path,
-				Hash:        result.Hash,
-				DisplayText: result.DisplayText,
-				PreviewData: result.Data,
-			}
-		}
-
-		return models.SearchResultsMsg{
-			Mode:    mode,
-			Query:   query,
-			Results: results,
-			Error:   nil,
+		// Create cancellable context
+		ctx, cancel := context.WithCancel(context.Background())
+		
+		// Start the search in the app state
+		a.state.StartSearch(mode, query, cancel)
+		
+		// Launch the actual search asynchronously
+		go a.performAsyncSearch(ctx, mode, query)
+		
+		// Return immediately to not block the UI
+		return models.SearchStartedMsg{
+			Mode:  mode,
+			Query: query,
 		}
 	}
+}
+
+// performAsyncSearch performs the search operation asynchronously
+func (a *App) performAsyncSearch(ctx context.Context, mode models.SearchMode, query string) {
+	// Create searcher
+	searcher, err := index.NewSearcher(a.state.ConfigManager)
+	if err != nil {
+		a.sendSearchError(mode, query, fmt.Errorf("failed to create searcher: %w", err))
+		return
+	}
+	defer searcher.Close()
+
+	// Get repositories from state safely
+	repos := a.state.Repositories
+	
+	// Send progress update
+	a.sendSearchProgress(mode, query, 10, "Starting search...", nil)
+	
+	// Check for cancellation
+	if ctx.Err() != nil {
+		a.sendSearchCancelled(mode, query)
+		return
+	}
+
+	// Perform the search
+	var searchResults []index.SearchResult
+	
+	switch mode {
+	case models.SearchFiles:
+		a.sendSearchProgress(mode, query, 30, "Searching files...", nil)
+		searchResults, err = a.searchWithProgress(ctx, func() ([]index.SearchResult, error) {
+			return searcher.SearchFiles("", "", repos)
+		}, mode, query)
+	case models.SearchCommits:
+		a.sendSearchProgress(mode, query, 30, "Searching commits...", nil)
+		searchResults, err = a.searchWithProgress(ctx, func() ([]index.SearchResult, error) {
+			return searcher.SearchCommits("", "", repos)
+		}, mode, query)
+	}
+
+	// Check for cancellation after search
+	if ctx.Err() != nil {
+		a.sendSearchCancelled(mode, query)
+		return
+	}
+
+	if err != nil {
+		a.sendSearchError(mode, query, fmt.Errorf("search failed: %w", err))
+		return
+	}
+
+	// Convert results
+	a.sendSearchProgress(mode, query, 90, "Processing results...", nil)
+	
+	results := make([]models.SearchResultItem, len(searchResults))
+	for i, result := range searchResults {
+		// Check for cancellation during conversion
+		if ctx.Err() != nil {
+			a.sendSearchCancelled(mode, query)
+			return
+		}
+		
+		results[i] = models.SearchResultItem{
+			Type:        result.Type,
+			Repository:  result.RepoAlias,
+			Path:        result.Path,
+			Hash:        result.Hash,
+			DisplayText: result.DisplayText,
+			PreviewData: result.Data,
+		}
+	}
+
+	// Send final results
+	a.sendSearchComplete(mode, query, results)
+}
+
+// searchWithProgress wraps search operations with progress updates
+func (a *App) searchWithProgress(ctx context.Context, searchFunc func() ([]index.SearchResult, error), mode models.SearchMode, query string) ([]index.SearchResult, error) {
+	// Run search in a separate goroutine
+	resultChan := make(chan []index.SearchResult, 1)
+	errorChan := make(chan error, 1)
+	
+	go func() {
+		results, err := searchFunc()
+		if err != nil {
+			errorChan <- err
+		} else {
+			resultChan <- results
+		}
+	}()
+	
+	// Send progress updates while waiting
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	
+	progress := 30
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case results := <-resultChan:
+			return results, nil
+		case err := <-errorChan:
+			return nil, err
+		case <-ticker.C:
+			progress = min(progress + 10, 80)
+			a.sendSearchProgress(mode, query, progress, "Searching...", nil)
+		}
+	}
+}
+
+// Helper functions to send search messages asynchronously
+func (a *App) sendSearchProgress(mode models.SearchMode, query string, progress int, currentOp string, partial []models.SearchResultItem) {
+	// Send message via tea program (this is safe from goroutines)
+	go func() {
+		if a.teaProgram != nil {
+			a.teaProgram.Send(models.SearchProgressMsg{
+				Mode:      mode,
+				Query:     query,
+				Progress:  progress,
+				CurrentOp: currentOp,
+				Partial:   partial,
+			})
+		}
+	}()
+}
+
+func (a *App) sendSearchComplete(mode models.SearchMode, query string, results []models.SearchResultItem) {
+	go func() {
+		if a.teaProgram != nil {
+			a.teaProgram.Send(models.SearchResultsMsg{
+				Mode:    mode,
+				Query:   query,
+				Results: results,
+			})
+		}
+	}()
+}
+
+func (a *App) sendSearchError(mode models.SearchMode, query string, err error) {
+	go func() {
+		if a.teaProgram != nil {
+			a.teaProgram.Send(models.SearchResultsMsg{
+				Mode:    mode,
+				Query:   query,
+				Results: nil,
+				Error:   err,
+			})
+		}
+	}()
+}
+
+func (a *App) sendSearchCancelled(mode models.SearchMode, query string) {
+	go func() {
+		if a.teaProgram != nil {
+			a.teaProgram.Send(models.SearchCancelledMsg{
+				Mode:  mode,
+				Query: query,
+			})
+		}
+	}()
+}
+
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // buildFzfCommand constructs the fzf command for the given search mode
@@ -610,24 +776,31 @@ func (a *App) updatePreviewFromSearch(result models.SearchResultItem) tea.Cmd {
 func Run(configMgr *config.Manager) error {
 	app := NewApp(configMgr)
 
-	// Create the tea program with adaptive options based on terminal capabilities
+	// Create the tea program with progressive feature degradation
 	options := []tea.ProgramOption{}
 	
-	// Try to detect if we can use advanced terminal features
-	if canUseAdvancedTUI() {
-		options = append(options,
-			tea.WithAltScreen(),       // Use alternate screen buffer
-			tea.WithMouseCellMotion(), // Enable mouse support
-		)
-	} else {
-		// Fallback mode: use basic terminal features
-		options = append(options,
-			tea.WithInput(os.Stdin),   // Use stdin directly
-			tea.WithOutput(os.Stdout), // Use stdout directly
-		)
+	// Always set basic I/O
+	options = append(options,
+		tea.WithInput(os.Stdin),
+		tea.WithOutput(os.Stdout),
+	)
+	
+	// Progressively add advanced features based on terminal capabilities
+	if supportsAltScreen() {
+		options = append(options, tea.WithAltScreen())
 	}
+	
+	if supportsMouseEvents() {
+		options = append(options, tea.WithMouseCellMotion())
+	}
+	
+	// Additional progressive features could be added here
+	// For example: 256 color support, true color support, etc.
 
 	p := tea.NewProgram(app, options...)
+	
+	// Set tea program reference for async messaging
+	app.SetTeaProgram(p)
 
 	// Run the program
 	_, err := p.Run()
@@ -641,17 +814,101 @@ func canUseAdvancedTUI() bool {
 		return false
 	}
 
-	// Check if we can access /dev/tty
-	if tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0); err == nil {
-		tty.Close()
-		return true
-	}
-
 	// Check TERM environment for basic compatibility
 	term := os.Getenv("TERM")
 	if term == "" || term == "dumb" {
 		return false
 	}
+	
+	// Check for terminals that are known to not support advanced features
+	incompatibleTerms := []string{"linux", "vt100", "vt102", "cons25"}
+	for _, incompatible := range incompatibleTerms {
+		if term == incompatible {
+			return false
+		}
+	}
 
-	return false // Default to fallback mode for safety
+	// Check if we can access /dev/tty (Unix-like systems)
+	if tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0); err == nil {
+		tty.Close()
+		return true
+	}
+	
+	// For terminals that typically support advanced features
+	supportedTerms := []string{
+		"xterm", "xterm-256color", "xterm-color", 
+		"screen", "screen-256color",
+		"tmux", "tmux-256color",
+		"iterm", "iterm2",
+		"alacritty", "kitty", "wezterm",
+		"gnome", "gnome-terminal",
+		"konsole", "terminator",
+	}
+	
+	for _, supported := range supportedTerms {
+		if strings.HasPrefix(term, supported) {
+			return true
+		}
+	}
+	
+	// Check for color support as a proxy for advanced features
+	if strings.Contains(term, "256color") || strings.Contains(term, "color") {
+		return true
+	}
+	
+	// Conservative default: enable if we have a reasonable terminal
+	// This replaces the hardcoded false return
+	return len(term) > 0 && !strings.Contains(term, "dumb")
+}
+
+// supportsMouseEvents checks if the terminal supports mouse events
+func supportsMouseEvents() bool {
+	term := os.Getenv("TERM")
+	
+	// Mouse support is generally available in modern terminals
+	mouseCapableTerms := []string{
+		"xterm", "screen", "tmux", "iterm", "alacritty", 
+		"kitty", "wezterm", "gnome", "konsole", "terminator",
+	}
+	
+	for _, capable := range mouseCapableTerms {
+		if strings.HasPrefix(term, capable) {
+			return true
+		}
+	}
+	
+	return canUseAdvancedTUI() // Fallback to advanced TUI check
+}
+
+// supportsAltScreen checks if the terminal supports alternate screen buffer
+func supportsAltScreen() bool {
+	term := os.Getenv("TERM")
+	
+	// Most modern terminals support alternate screen
+	altScreenCapableTerms := []string{
+		"xterm", "screen", "tmux", "iterm", "alacritty",
+		"kitty", "wezterm", "gnome", "konsole",
+	}
+	
+	for _, capable := range altScreenCapableTerms {
+		if strings.HasPrefix(term, capable) {
+			return true
+		}
+	}
+	
+	// Check for specific terminal features
+	if strings.Contains(term, "256color") {
+		return true
+	}
+	
+	return false
+}
+
+// supports256Colors checks if the terminal supports 256 colors
+func supports256Colors() bool {
+	term := os.Getenv("TERM")
+	return strings.Contains(term, "256color") || 
+		   strings.HasPrefix(term, "alacritty") ||
+		   strings.HasPrefix(term, "kitty") ||
+		   strings.HasPrefix(term, "iterm")
 }

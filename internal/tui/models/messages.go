@@ -42,6 +42,27 @@ type SearchResultsMsg struct {
 	Error   error
 }
 
+// SearchStartedMsg is sent when a search operation begins
+type SearchStartedMsg struct {
+	Mode  SearchMode
+	Query string
+}
+
+// SearchProgressMsg is sent periodically during search operations
+type SearchProgressMsg struct {
+	Mode       SearchMode
+	Query      string
+	Progress   int // percentage completed
+	CurrentOp  string // current operation description
+	Partial    []SearchResultItem // partial results
+}
+
+// SearchCancelledMsg is sent when a search is cancelled
+type SearchCancelledMsg struct {
+	Mode  SearchMode
+	Query string
+}
+
 // PreviewContentMsg is sent when preview content is ready
 type PreviewContentMsg struct {
 	Content     string

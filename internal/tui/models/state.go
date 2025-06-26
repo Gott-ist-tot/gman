@@ -97,6 +97,12 @@ type SearchState struct {
 	Results      []SearchResultItem
 	SelectedItem int
 	IsActive     bool
+	
+	// Async search state
+	IsSearching  bool
+	Progress     int
+	CurrentOp    string
+	CancelFunc   func() // Function to cancel current search
 }
 
 // PreviewState holds state for the preview panel
@@ -258,23 +264,35 @@ func (s *AppState) GetSelectedRepository() *RepoDisplayItem {
 	return nil
 }
 
-// NextPanel moves focus to the next panel
+// NextPanel moves focus to the next panel (thread-safe)
 func (s *AppState) NextPanel() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
 	s.FocusedPanel = (s.FocusedPanel + 1) % 5
 }
 
-// PrevPanel moves focus to the previous panel
+// PrevPanel moves focus to the previous panel (thread-safe)
 func (s *AppState) PrevPanel() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
 	s.FocusedPanel = (s.FocusedPanel + 4) % 5 // +4 is equivalent to -1 mod 5
 }
 
-// SetFocusedPanel sets the focused panel
+// SetFocusedPanel sets the focused panel (thread-safe)
 func (s *AppState) SetFocusedPanel(panel PanelType) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
 	s.FocusedPanel = panel
 }
 
-// ToggleHelp toggles the help display
+// ToggleHelp toggles the help display (thread-safe)
 func (s *AppState) ToggleHelp() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
 	s.ShowHelp = !s.ShowHelp
 }
 
@@ -331,4 +349,130 @@ func (s *AppState) GetSelectedRepoAlias() string {
 	defer s.mu.RUnlock()
 	
 	return s.SelectedRepo
+}
+
+// UpdateSearchResults updates search state with new results (thread-safe)
+func (s *AppState) UpdateSearchResults(results []SearchResultItem, query string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	s.SearchState.Results = results
+	s.SearchState.Query = query
+	if len(results) > 0 {
+		s.SearchState.SelectedItem = 0
+	}
+}
+
+// GetFocusedPanel returns the currently focused panel (thread-safe)
+func (s *AppState) GetFocusedPanel() PanelType {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	return s.FocusedPanel
+}
+
+// GetShowHelp returns the help display state (thread-safe)
+func (s *AppState) GetShowHelp() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	return s.ShowHelp
+}
+
+// GetWindowDimensions returns the window dimensions (thread-safe)
+func (s *AppState) GetWindowDimensions() (int, int) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	return s.WindowWidth, s.WindowHeight
+}
+
+// GetAutoRefresh returns the auto refresh state (thread-safe)
+func (s *AppState) GetAutoRefresh() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	return s.StatusState.AutoRefresh
+}
+
+// StartSearch starts a new search operation (thread-safe)
+func (s *AppState) StartSearch(mode SearchMode, query string, cancelFunc func()) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	// Cancel any existing search
+	if s.SearchState.CancelFunc != nil {
+		s.SearchState.CancelFunc()
+	}
+	
+	s.SearchState.Mode = mode
+	s.SearchState.Query = query
+	s.SearchState.IsSearching = true
+	s.SearchState.Progress = 0
+	s.SearchState.CurrentOp = "Initializing search..."
+	s.SearchState.CancelFunc = cancelFunc
+	s.SearchState.Results = nil
+	s.SearchState.SelectedItem = 0
+}
+
+// UpdateSearchProgress updates search progress (thread-safe)
+func (s *AppState) UpdateSearchProgress(progress int, currentOp string, partial []SearchResultItem) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	s.SearchState.Progress = progress
+	s.SearchState.CurrentOp = currentOp
+	if partial != nil {
+		s.SearchState.Results = partial
+	}
+}
+
+// CompleteSearch completes a search operation (thread-safe)
+func (s *AppState) CompleteSearch(results []SearchResultItem, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	s.SearchState.IsSearching = false
+	s.SearchState.Progress = 100
+	s.SearchState.CancelFunc = nil
+	
+	if err == nil {
+		s.SearchState.Results = results
+		if len(results) > 0 {
+			s.SearchState.SelectedItem = 0
+		}
+	}
+}
+
+// CancelSearch cancels the current search operation (thread-safe)
+func (s *AppState) CancelSearch() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	if s.SearchState.CancelFunc != nil {
+		s.SearchState.CancelFunc()
+		s.SearchState.CancelFunc = nil
+	}
+	
+	s.SearchState.IsSearching = false
+	s.SearchState.Progress = 0
+	s.SearchState.CurrentOp = ""
+}
+
+// GetSearchState returns the current search state (thread-safe)
+func (s *AppState) GetSearchState() SearchState {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	// Return a copy to avoid race conditions
+	return SearchState{
+		Mode:         s.SearchState.Mode,
+		Query:        s.SearchState.Query,
+		Results:      append([]SearchResultItem{}, s.SearchState.Results...),
+		SelectedItem: s.SearchState.SelectedItem,
+		IsActive:     s.SearchState.IsActive,
+		IsSearching:  s.SearchState.IsSearching,
+		Progress:     s.SearchState.Progress,
+		CurrentOp:    s.SearchState.CurrentOp,
+	}
 }
