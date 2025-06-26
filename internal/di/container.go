@@ -34,6 +34,12 @@ func GetContainer() *Container {
 	return container
 }
 
+// Reset resets the singleton container (for testing)
+func Reset() {
+	container = nil
+	once = sync.Once{}
+}
+
 // Initialize sets up all dependencies
 func (c *Container) Initialize() error {
 	c.mu.Lock()

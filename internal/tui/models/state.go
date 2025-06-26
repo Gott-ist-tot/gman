@@ -1,6 +1,7 @@
 package models
 
 import (
+	"sync"
 	"time"
 
 	"gman/internal/config"
@@ -9,6 +10,8 @@ import (
 
 // AppState represents the global state of the TUI application
 type AppState struct {
+	mu sync.RWMutex // Protects concurrent access to state
+
 	// Configuration
 	ConfigManager *config.Manager
 	Repositories  map[string]string
@@ -34,6 +37,11 @@ type AppState struct {
 	// Background tasks
 	LastStatusUpdate time.Time
 	RefreshTicker    *time.Ticker
+
+	// Error handling
+	LastError     error
+	ErrorVisible  bool
+	ErrorMessage  string
 }
 
 // PanelType represents the different panels in the dashboard
@@ -214,8 +222,11 @@ func NewAppState(configMgr *config.Manager) *AppState {
 	}
 }
 
-// UpdateRepositoryData updates the repository data in the state
+// UpdateRepositoryData updates the repository data in the state (thread-safe)
 func (s *AppState) UpdateRepositoryData(alias string, status *types.RepoStatus) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
 	s.SelectedRepoData = status
 
 	// Update the repository in the visible list
@@ -227,15 +238,20 @@ func (s *AppState) UpdateRepositoryData(alias string, status *types.RepoStatus) 
 	}
 }
 
-// GetSelectedRepository returns the currently selected repository
+// GetSelectedRepository returns the currently selected repository (thread-safe)
 func (s *AppState) GetSelectedRepository() *RepoDisplayItem {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
 	if s.SelectedRepo == "" {
 		return nil
 	}
 
 	for _, repo := range s.RepositoryListState.VisibleRepos {
 		if repo.Alias == s.SelectedRepo {
-			return &repo
+			// Return a copy to avoid race conditions
+			repoCopy := repo
+			return &repoCopy
 		}
 	}
 
@@ -262,8 +278,57 @@ func (s *AppState) ToggleHelp() {
 	s.ShowHelp = !s.ShowHelp
 }
 
-// UpdateWindowSize updates the window dimensions
+// UpdateWindowSize updates the window dimensions (thread-safe)
 func (s *AppState) UpdateWindowSize(width, height int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
 	s.WindowWidth = width
 	s.WindowHeight = height
+}
+
+// SetError sets an error in the state (thread-safe)
+func (s *AppState) SetError(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	s.LastError = err
+	if err != nil {
+		s.ErrorMessage = err.Error()
+		s.ErrorVisible = true
+	}
+}
+
+// ClearError clears any error in the state (thread-safe)
+func (s *AppState) ClearError() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	s.LastError = nil
+	s.ErrorMessage = ""
+	s.ErrorVisible = false
+}
+
+// GetError returns the current error state (thread-safe)
+func (s *AppState) GetError() (error, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	return s.LastError, s.ErrorVisible
+}
+
+// SetSelectedRepo sets the selected repository (thread-safe)
+func (s *AppState) SetSelectedRepo(alias string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	s.SelectedRepo = alias
+}
+
+// GetSelectedRepoAlias returns the selected repository alias (thread-safe)
+func (s *AppState) GetSelectedRepoAlias() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	return s.SelectedRepo
 }

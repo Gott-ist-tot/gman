@@ -103,9 +103,20 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.state.ToggleHelp()
 
 	case models.ErrorMsg:
-		// Handle errors (could show in status bar or notification)
-		// For now, just log them
-		fmt.Printf("Error: %v\n", msg.Error)
+		// Handle errors with improved context and state management
+		a.state.SetError(msg.Error)
+		
+		// Log error with context for debugging
+		if msg.Context != "" {
+			fmt.Printf("Error in %s: %v\n", msg.Context, msg.Error)
+		} else {
+			fmt.Printf("Error: %v\n", msg.Error)
+		}
+		
+		// If this is a fatal error, initiate app exit
+		if msg.Fatal {
+			cmds = append(cmds, models.ExitCmd())
+		}
 
 	case models.FzfLaunchMsg:
 		// Handle fzf search launch

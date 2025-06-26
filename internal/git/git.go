@@ -45,7 +45,7 @@ func (g *Manager) getRepoStatusInternal(alias, path string, withFetch bool) type
 
 	// Check if path exists and is a git repository
 	if !g.isGitRepository(path) {
-		status.Error = fmt.Errorf("not a git repository")
+		status.Error = fmt.Errorf("path '%s' is not a git repository", path)
 		return status
 	}
 
@@ -55,7 +55,7 @@ func (g *Manager) getRepoStatusInternal(alias, path string, withFetch bool) type
 	// Get current branch
 	branch, err := g.getCurrentBranch(path)
 	if err != nil {
-		status.Error = err
+		status.Error = fmt.Errorf("failed to get current branch for '%s': %w", path, err)
 		return status
 	}
 	status.Branch = branch
@@ -63,7 +63,7 @@ func (g *Manager) getRepoStatusInternal(alias, path string, withFetch bool) type
 	// Get workspace status
 	workspaceStatus, err := g.getWorkspaceStatus(path)
 	if err != nil {
-		status.Error = err
+		status.Error = fmt.Errorf("failed to get workspace status for '%s': %w", path, err)
 		return status
 	}
 	status.Workspace = workspaceStatus
@@ -71,7 +71,7 @@ func (g *Manager) getRepoStatusInternal(alias, path string, withFetch bool) type
 	// Get sync status
 	syncStatus, err := g.getSyncStatusInternal(path, withFetch)
 	if err != nil {
-		status.Error = err
+		status.Error = fmt.Errorf("failed to get sync status for '%s': %w", path, err)
 		return status
 	}
 	status.SyncStatus = syncStatus
@@ -79,7 +79,7 @@ func (g *Manager) getRepoStatusInternal(alias, path string, withFetch bool) type
 	// Get last commit
 	lastCommit, err := g.getLastCommit(path)
 	if err != nil {
-		status.Error = err
+		status.Error = fmt.Errorf("failed to get last commit for '%s': %w", path, err)
 		return status
 	}
 	status.LastCommit = lastCommit
@@ -218,6 +218,11 @@ func (g *Manager) RunCommand(path string, args ...string) (string, error) {
 
 	cmd := exec.Command("git", args...)
 	cmd.Dir = path
+	
+	// Force English locale to ensure consistent Git output parsing
+	// This prevents issues with localized Git messages
+	cmd.Env = append(os.Environ(), "LANG=C", "LC_ALL=C")
+	
 	output, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(output)), err
 }

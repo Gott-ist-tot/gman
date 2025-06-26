@@ -82,7 +82,9 @@ type SearchModeMsg struct {
 
 // ErrorMsg is sent when an error occurs
 type ErrorMsg struct {
-	Error error
+	Error   error
+	Context string // Additional context for the error
+	Fatal   bool   // Whether this error should cause the app to exit
 }
 
 // CommandExecutedMsg is sent when a command is executed
@@ -153,8 +155,17 @@ func StatusTickCmd() tea.Cmd {
 
 // ErrorCmd returns a command that sends an ErrorMsg
 func ErrorCmd(err error) tea.Cmd {
+	return ErrorCmdWithContext(err, "", false)
+}
+
+// ErrorCmdWithContext returns a command that sends an ErrorMsg with context
+func ErrorCmdWithContext(err error, context string, fatal bool) tea.Cmd {
 	return func() tea.Msg {
-		return ErrorMsg{Error: err}
+		return ErrorMsg{
+			Error:   err,
+			Context: context,
+			Fatal:   fatal,
+		}
 	}
 }
 

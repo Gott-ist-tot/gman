@@ -44,7 +44,7 @@ func (s *StatusManager) getRepoStatusInternal(alias, path string, withFetch bool
 
 	// Check if path exists and is a git repository
 	if !s.isGitRepository(path) {
-		status.Error = fmt.Errorf("not a git repository")
+		status.Error = fmt.Errorf("path '%s' is not a git repository", path)
 		return status
 	}
 
@@ -54,7 +54,7 @@ func (s *StatusManager) getRepoStatusInternal(alias, path string, withFetch bool
 	// Get current branch
 	branch, err := s.getCurrentBranch(path)
 	if err != nil {
-		status.Error = err
+		status.Error = fmt.Errorf("failed to get current branch for '%s': %w", path, err)
 		return status
 	}
 	status.Branch = branch
@@ -62,7 +62,7 @@ func (s *StatusManager) getRepoStatusInternal(alias, path string, withFetch bool
 	// Get workspace status
 	workspaceStatus, err := s.getWorkspaceStatus(path)
 	if err != nil {
-		status.Error = err
+		status.Error = fmt.Errorf("failed to get workspace status for '%s': %w", path, err)
 		return status
 	}
 	status.Workspace = workspaceStatus
@@ -70,7 +70,7 @@ func (s *StatusManager) getRepoStatusInternal(alias, path string, withFetch bool
 	// Get sync status
 	syncStatus, err := s.getSyncStatusInternal(path, withFetch)
 	if err != nil {
-		status.Error = err
+		status.Error = fmt.Errorf("failed to get sync status for '%s': %w", path, err)
 		return status
 	}
 	status.SyncStatus = syncStatus
@@ -78,7 +78,7 @@ func (s *StatusManager) getRepoStatusInternal(alias, path string, withFetch bool
 	// Get last commit
 	lastCommit, err := s.getLastCommit(path)
 	if err != nil {
-		status.Error = err
+		status.Error = fmt.Errorf("failed to get last commit for '%s': %w", path, err)
 		return status
 	}
 	status.LastCommit = lastCommit

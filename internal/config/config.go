@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"gman/pkg/types"
@@ -61,10 +62,15 @@ func (m *Manager) Load() error {
 		return fmt.Errorf("error reading config file: %w", err)
 	}
 
-	// Unmarshal YAML directly
+	// Unmarshal YAML directly with strict mode to catch errors
 	config := &types.Config{}
 	if err := yaml.Unmarshal(data, config); err != nil {
-		return fmt.Errorf("error unmarshaling config: %w", err)
+		return fmt.Errorf("invalid YAML in config file '%s': %w", configPath, err)
+	}
+
+	// Validate configuration structure and values
+	if err := m.validateConfig(config); err != nil {
+		return fmt.Errorf("configuration validation failed: %w", err)
 	}
 
 	// Set defaults if not present
@@ -199,6 +205,11 @@ func (m *Manager) CreateDefaultConfig() error {
 func (m *Manager) getConfigPath() string {
 	if m.configPath != "" {
 		return m.configPath
+	}
+
+	// Check for environment variable override
+	if envPath := os.Getenv("GMAN_CONFIG"); envPath != "" {
+		return envPath
 	}
 
 	home, err := os.UserHomeDir()
@@ -401,4 +412,107 @@ func (m *Manager) RemoveFromGroup(groupName string, repositories []string) error
 
 	m.config.Groups[groupName] = group
 	return m.Save()
+}
+
+// validateConfig validates the configuration structure and values
+func (m *Manager) validateConfig(config *types.Config) error {
+	// Validate repository paths
+	if config.Repositories != nil {
+		for alias, path := range config.Repositories {
+			if alias == "" {
+				return fmt.Errorf("repository alias cannot be empty")
+			}
+			if path == "" {
+				return fmt.Errorf("repository path cannot be empty for alias '%s'", alias)
+			}
+			
+			// Validate alias format (no special characters that could cause issues)
+			if err := m.validateAlias(alias); err != nil {
+				return fmt.Errorf("invalid alias '%s': %w", alias, err)
+			}
+			
+			// Expand and validate path
+			expandedPath, err := expandPath(path)
+			if err != nil {
+				return fmt.Errorf("invalid path '%s' for alias '%s': %w", path, alias, err)
+			}
+			
+			// Check if path exists (warning, not error)
+			if _, err := os.Stat(expandedPath); os.IsNotExist(err) {
+				// Log warning but don't fail validation
+				fmt.Printf("Warning: Repository path '%s' for alias '%s' does not exist\n", expandedPath, alias)
+			}
+		}
+	}
+
+	// Validate settings
+	if config.Settings.ParallelJobs < 0 {
+		return fmt.Errorf("parallel_jobs must be >= 0, got %d", config.Settings.ParallelJobs)
+	}
+	if config.Settings.ParallelJobs > 50 {
+		return fmt.Errorf("parallel_jobs too high (max 50), got %d", config.Settings.ParallelJobs)
+	}
+
+	// Validate sync mode
+	validSyncModes := map[string]bool{
+		"ff-only":   true,
+		"merge":     true,
+		"rebase":    true,
+		"autostash": true,
+	}
+	if config.Settings.DefaultSyncMode != "" && !validSyncModes[config.Settings.DefaultSyncMode] {
+		return fmt.Errorf("invalid default_sync_mode '%s', must be one of: ff-only, merge, rebase, autostash", config.Settings.DefaultSyncMode)
+	}
+
+	// Validate groups
+	if config.Groups != nil {
+		for groupName, group := range config.Groups {
+			if groupName == "" {
+				return fmt.Errorf("group name cannot be empty")
+			}
+			
+			if err := m.validateAlias(groupName); err != nil {
+				return fmt.Errorf("invalid group name '%s': %w", groupName, err)
+			}
+			
+			// Validate that repositories in groups exist in the main repository list
+			for _, repoAlias := range group.Repositories {
+				if config.Repositories != nil {
+					if _, exists := config.Repositories[repoAlias]; !exists {
+						return fmt.Errorf("group '%s' references non-existent repository '%s'", groupName, repoAlias)
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// validateAlias validates that an alias follows safe naming conventions
+func (m *Manager) validateAlias(alias string) error {
+	if len(alias) == 0 {
+		return fmt.Errorf("alias cannot be empty")
+	}
+	
+	if len(alias) > 100 {
+		return fmt.Errorf("alias too long (max 100 characters)")
+	}
+	
+	// Check for dangerous characters
+	dangerousChars := []string{"/", "\\", ":", "*", "?", "\"", "<", ">", "|", ";", "&", "$", "`", "(", ")", "{", "}", "[", "]"}
+	for _, char := range dangerousChars {
+		if strings.Contains(alias, char) {
+			return fmt.Errorf("alias contains dangerous character: %s", char)
+		}
+	}
+	
+	// Check for control characters
+	for _, r := range alias {
+		if r < 32 || r == 127 {
+			return fmt.Errorf("alias contains control character")
+		}
+	}
+	
+	return nil
 }
