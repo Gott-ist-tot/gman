@@ -155,20 +155,20 @@ func (s *StatusPanel) renderStatus(repo *models.RepoDisplayItem) string {
 func (s *StatusPanel) renderStatusOverview(status *types.RepoStatus) string {
 	var lines []string
 
-	// Workspace status
-	workspaceIcon := styles.GetStatusIcon(status.Workspace.String())
+	// Workspace status with enhanced visual indicators
+	workspaceIcon := styles.GetWorkspaceStatusIcon(status.Workspace.String())
 	workspaceStyle := styles.GetStatusStyle(status.Workspace.String())
 	workspaceLine := fmt.Sprintf("%s Workspace: %s",
 		workspaceIcon,
-		workspaceStyle.Render(status.Workspace.String()))
+		workspaceStyle.Render(strings.ToUpper(status.Workspace.String())))
 	lines = append(lines, workspaceLine)
 
-	// Sync status
-	syncIcon := styles.GetStatusIcon(status.SyncStatus.String())
+	// Sync status with directional indicators
+	syncIcon := styles.GetSyncStatusIcon(status.SyncStatus.Ahead, status.SyncStatus.Behind)
 	syncStyle := styles.GetStatusStyle(status.SyncStatus.String())
 	syncLine := fmt.Sprintf("%s Sync: %s",
 		syncIcon,
-		syncStyle.Render(status.SyncStatus.String()))
+		syncStyle.Render(strings.ToUpper(status.SyncStatus.String())))
 	lines = append(lines, syncLine)
 
 	// Show sync error details if present

@@ -128,6 +128,56 @@ type ActionCompleteMsg struct {
 // HideResultMsg is sent to hide action results
 type HideResultMsg struct{}
 
+// ToastMsg is sent to show a toast notification
+type ToastMsg struct {
+	Message  string
+	Type     ToastType
+	Duration time.Duration
+}
+
+// ToastHideMsg is sent to hide a toast notification
+type ToastHideMsg struct {
+	ID string
+}
+
+// ToastType represents different types of toast notifications
+type ToastType int
+
+const (
+	ToastSuccess ToastType = iota
+	ToastError
+	ToastWarning
+	ToastInfo
+)
+
+func (t ToastType) String() string {
+	switch t {
+	case ToastSuccess:
+		return "success"
+	case ToastError:
+		return "error"
+	case ToastWarning:
+		return "warning"
+	case ToastInfo:
+		return "info"
+	default:
+		return "info"
+	}
+}
+
+// ProgressMsg is sent to show progress for long operations
+type ProgressMsg struct {
+	ID          string
+	Progress    int    // 0-100
+	Message     string
+	Indeterminate bool // spinner mode
+}
+
+// ProgressHideMsg is sent to hide a progress indicator
+type ProgressHideMsg struct {
+	ID string
+}
+
 // ExitMsg is sent when the application should exit
 type ExitMsg struct{}
 
@@ -232,5 +282,55 @@ func SortChangedCmd(sortBy SortType) tea.Cmd {
 func HelpToggleCmd() tea.Cmd {
 	return func() tea.Msg {
 		return HelpToggleMsg{}
+	}
+}
+
+// ToastCmd returns a command that shows a toast notification
+func ToastCmd(message string, toastType ToastType, duration time.Duration) tea.Cmd {
+	return func() tea.Msg {
+		return ToastMsg{
+			Message:  message,
+			Type:     toastType,
+			Duration: duration,
+		}
+	}
+}
+
+// ToastSuccessCmd shows a success toast with default duration
+func ToastSuccessCmd(message string) tea.Cmd {
+	return ToastCmd(message, ToastSuccess, 3*time.Second)
+}
+
+// ToastErrorCmd shows an error toast with longer duration
+func ToastErrorCmd(message string) tea.Cmd {
+	return ToastCmd(message, ToastError, 5*time.Second)
+}
+
+// ToastWarningCmd shows a warning toast
+func ToastWarningCmd(message string) tea.Cmd {
+	return ToastCmd(message, ToastWarning, 4*time.Second)
+}
+
+// ToastInfoCmd shows an info toast
+func ToastInfoCmd(message string) tea.Cmd {
+	return ToastCmd(message, ToastInfo, 3*time.Second)
+}
+
+// ProgressCmd returns a command that shows progress
+func ProgressCmd(id, message string, progress int, indeterminate bool) tea.Cmd {
+	return func() tea.Msg {
+		return ProgressMsg{
+			ID:            id,
+			Progress:      progress,
+			Message:       message,
+			Indeterminate: indeterminate,
+		}
+	}
+}
+
+// ProgressHideCmd returns a command that hides progress
+func ProgressHideCmd(id string) tea.Cmd {
+	return func() tea.Msg {
+		return ProgressHideMsg{ID: id}
 	}
 }

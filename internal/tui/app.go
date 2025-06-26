@@ -155,6 +155,27 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case models.SearchCancelledMsg:
 		// Search was cancelled
 		a.state.CancelSearch()
+
+	case models.ToastMsg:
+		// Add toast notification
+		id := a.state.AddToast(msg.Message, msg.Type, msg.Duration)
+		
+		// Set up auto-hide timer
+		cmds = append(cmds, tea.Tick(msg.Duration, func(t time.Time) tea.Msg {
+			return models.ToastHideMsg{ID: id}
+		}))
+
+	case models.ToastHideMsg:
+		// Remove toast notification
+		a.state.RemoveToast(msg.ID)
+
+	case models.ProgressMsg:
+		// Update progress indicator
+		a.state.SetProgress(msg.ID, msg.Message, msg.Progress, msg.Indeterminate)
+
+	case models.ProgressHideMsg:
+		// Remove progress indicator
+		a.state.RemoveProgress(msg.ID)
 	}
 
 	// Update panels
@@ -346,11 +367,20 @@ func (a *App) renderDashboard() string {
 	// Add status bar
 	statusBar := a.renderStatusBar()
 
-	return lipgloss.JoinVertical(
+	// Add toasts overlay
+	content := lipgloss.JoinVertical(
 		lipgloss.Left,
 		dashboard,
 		statusBar,
 	)
+
+	// Render toasts on top-right corner
+	content = a.renderWithToasts(content)
+
+	// Render progress indicators on bottom
+	content = a.renderWithProgress(content)
+
+	return content
 }
 
 // renderPanel renders a panel with border and title
@@ -430,6 +460,66 @@ Press any key to return to dashboard...`
 		Align(lipgloss.Left)
 
 	return helpStyle.Render(help)
+}
+
+// renderWithToasts renders content with toast notifications overlaid
+func (a *App) renderWithToasts(content string) string {
+	toasts := a.state.GetActiveToasts()
+	if len(toasts) == 0 {
+		return content
+	}
+
+	// Calculate position for toasts (top-right corner)
+	windowWidth := a.state.WindowWidth
+	toastWidth := 40
+	toastX := windowWidth - toastWidth - 2
+
+	// Render each toast
+	var toastViews []string
+	for _, toast := range toasts {
+		toastView := styles.RenderToast(toast.Message, int(toast.Type))
+		toastViews = append(toastViews, toastView)
+	}
+
+	// Join toasts vertically
+	toastStack := lipgloss.JoinVertical(lipgloss.Left, toastViews...)
+
+	// Position toasts at top-right
+	toastOverlay := lipgloss.NewStyle().
+		MarginTop(1).
+		MarginLeft(toastX).
+		Render(toastStack)
+
+	return lipgloss.JoinVertical(lipgloss.Left, toastOverlay, content)
+}
+
+// renderWithProgress renders content with progress indicators
+func (a *App) renderWithProgress(content string) string {
+	activeProgress := a.state.GetActiveProgress()
+	if len(activeProgress) == 0 {
+		return content
+	}
+
+	// Render progress indicators
+	var progressViews []string
+	for _, progress := range activeProgress {
+		var progressView string
+		if progress.Indeterminate {
+			// Use spinner for indeterminate progress
+			frame := int(time.Since(progress.StartTime).Milliseconds() / 100)
+			progressView = styles.RenderSpinner(progress.Message, frame)
+		} else {
+			// Use progress bar for determinate progress
+			progressView = styles.RenderProgressBar(progress.Progress, progress.Message, 30)
+		}
+		progressViews = append(progressViews, progressView)
+	}
+
+	// Join progress indicators
+	progressStack := lipgloss.JoinVertical(lipgloss.Left, progressViews...)
+
+	// Add progress at bottom
+	return lipgloss.JoinVertical(lipgloss.Left, content, progressStack)
 }
 
 // isInputMessage returns true if the message is an input message that should

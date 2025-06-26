@@ -1,6 +1,9 @@
 package styles
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -182,6 +185,47 @@ var (
 				Foreground(ColorTextPrimary).
 				Background(ColorBgSecondary).
 				Padding(1)
+
+	// Toast notification styles
+	ToastSuccessStyle = lipgloss.NewStyle().
+				Foreground(ColorTextInverse).
+				Background(ColorSuccess).
+				Padding(0, 1).
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(ColorSuccess)
+
+	ToastErrorStyle = lipgloss.NewStyle().
+				Foreground(ColorTextInverse).
+				Background(ColorDanger).
+				Padding(0, 1).
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(ColorDanger)
+
+	ToastWarningStyle = lipgloss.NewStyle().
+				Foreground(ColorTextInverse).
+				Background(ColorWarning).
+				Padding(0, 1).
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(ColorWarning)
+
+	ToastInfoStyle = lipgloss.NewStyle().
+				Foreground(ColorTextInverse).
+				Background(ColorInfo).
+				Padding(0, 1).
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(ColorInfo)
+
+	// Progress indicator styles
+	ProgressBarStyle = lipgloss.NewStyle().
+				Foreground(ColorSuccess).
+				Background(ColorBgSecondary).
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(ColorBorderPrimary).
+				Padding(0, 1)
+
+	SpinnerStyle = lipgloss.NewStyle().
+				Foreground(ColorPrimary).
+				Bold(true)
 )
 
 // Theme represents a color theme for the application
@@ -258,23 +302,94 @@ func GetStatusStyle(status string) lipgloss.Style {
 	}
 }
 
-// GetStatusIcon returns an icon for a status
+// GetStatusIcon returns an icon for a status with enhanced semantic meaning
 func GetStatusIcon(status string) string {
 	switch status {
 	case "clean":
 		return "✅"
-	case "dirty":
+	case "dirty", "uncommitted":
 		return "📝"
+	case "stashed":
+		return "📦"
+	case "conflicts":
+		return "⚠️"
 	case "ahead":
-		return "↑"
+		return "↗️"
 	case "behind":
-		return "↓"
+		return "↙️"
 	case "diverged":
-		return "↕"
+		return "↕️"
 	case "error":
 		return "❌"
+	case "synced":
+		return "🔄"
 	default:
 		return "❓"
+	}
+}
+
+// GetWorkspaceStatusIcon returns workspace-specific status icons
+func GetWorkspaceStatusIcon(workspace string) string {
+	switch workspace {
+	case "clean":
+		return "🟢"
+	case "dirty":
+		return "🔵"
+	case "stashed":
+		return "🟡"
+	case "conflicts":
+		return "🔴"
+	default:
+		return "⚪"
+	}
+}
+
+// GetSyncStatusIcon returns sync-specific status icons with directional meaning
+func GetSyncStatusIcon(ahead, behind int) string {
+	if ahead > 0 && behind > 0 {
+		return "🔀" // diverged
+	} else if ahead > 0 {
+		return "⬆️" // ahead
+	} else if behind > 0 {
+		return "⬇️" // behind
+	} else {
+		return "✅" // synced
+	}
+}
+
+// GetActionIcon returns an icon for action items
+func GetActionIcon(actionName string) string {
+	switch actionName {
+	case "Refresh Status":
+		return "🔄"
+	case "Open in Terminal":
+		return "💻"
+	case "Open in File Manager":
+		return "📁"
+	case "Sync Repository":
+		return "🔽"
+	case "Commit Changes":
+		return "💾"
+	case "Push Changes":
+		return "⬆️"
+	case "Stash Changes":
+		return "📦"
+	case "Pop Stash":
+		return "📤"
+	case "Switch Branch":
+		return "🌿"
+	case "Create Branch":
+		return "🌱"
+	case "Merge Branch":
+		return "🧬"
+	case "Create Worktree":
+		return "🌳"
+	case "Compare Files":
+		return "🔍"
+	case "View Log":
+		return "📜"
+	default:
+		return "⚡"
 	}
 }
 
@@ -331,4 +446,74 @@ func CreatePanel(content string, title string, width, height int, focused bool) 
 		Render(content)
 
 	return lipgloss.JoinVertical(lipgloss.Left, titleBar, contentArea)
+}
+
+// GetToastStyle returns the appropriate style for a toast type
+func GetToastStyle(toastType interface{}) lipgloss.Style {
+	// Import the ToastType from models package if needed
+	switch toastType.(type) {
+	case int:
+		switch toastType.(int) {
+		case 0: // ToastSuccess
+			return ToastSuccessStyle
+		case 1: // ToastError
+			return ToastErrorStyle
+		case 2: // ToastWarning
+			return ToastWarningStyle
+		case 3: // ToastInfo
+			return ToastInfoStyle
+		}
+	}
+	return ToastInfoStyle
+}
+
+// RenderToast renders a toast notification
+func RenderToast(message string, toastType interface{}) string {
+	style := GetToastStyle(toastType)
+	icon := getToastIcon(toastType)
+	return style.Render(icon + " " + message)
+}
+
+// getToastIcon returns an icon for a toast type
+func getToastIcon(toastType interface{}) string {
+	switch toastType.(type) {
+	case int:
+		switch toastType.(int) {
+		case 0: // ToastSuccess
+			return "✅"
+		case 1: // ToastError
+			return "❌"
+		case 2: // ToastWarning
+			return "⚠️"
+		case 3: // ToastInfo
+			return "ℹ️"
+		}
+	}
+	return "ℹ️"
+}
+
+// RenderProgressBar renders a progress bar
+func RenderProgressBar(progress int, message string, width int) string {
+	if width <= 0 {
+		width = 20
+	}
+	
+	filled := int(float64(progress) / 100.0 * float64(width))
+	if filled > width {
+		filled = width
+	}
+	
+	bar := strings.Repeat("█", filled) + strings.Repeat("░", width-filled)
+	progressText := fmt.Sprintf(" %d%% ", progress)
+	
+	content := fmt.Sprintf("%s [%s]%s", message, bar, progressText)
+	return ProgressBarStyle.Render(content)
+}
+
+// RenderSpinner renders a spinner with message
+func RenderSpinner(message string, frame int) string {
+	spinChars := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+	spinner := spinChars[frame%len(spinChars)]
+	content := fmt.Sprintf("%s %s", spinner, message)
+	return SpinnerStyle.Render(content)
 }

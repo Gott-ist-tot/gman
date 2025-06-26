@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -42,6 +43,12 @@ type AppState struct {
 	LastError     error
 	ErrorVisible  bool
 	ErrorMessage  string
+
+	// Toast notifications
+	ActiveToasts []ToastNotification
+
+	// Progress indicators
+	ActiveProgress map[string]ProgressIndicator
 }
 
 // PanelType represents the different panels in the dashboard
@@ -187,6 +194,24 @@ type SearchResultItem struct {
 	PreviewData interface{}
 }
 
+// ToastNotification represents an active toast notification
+type ToastNotification struct {
+	ID        string
+	Message   string
+	Type      ToastType
+	StartTime time.Time
+	Duration  time.Duration
+}
+
+// ProgressIndicator represents an active progress indicator
+type ProgressIndicator struct {
+	ID            string
+	Message       string
+	Progress      int
+	Indeterminate bool
+	StartTime     time.Time
+}
+
 // NewAppState creates a new application state
 func NewAppState(configMgr *config.Manager) *AppState {
 	// Load configuration first
@@ -225,6 +250,8 @@ func NewAppState(configMgr *config.Manager) *AppState {
 		},
 
 		LastStatusUpdate: time.Now(),
+		ActiveToasts:     make([]ToastNotification, 0),
+		ActiveProgress:   make(map[string]ProgressIndicator),
 	}
 }
 
@@ -475,4 +502,102 @@ func (s *AppState) GetSearchState() SearchState {
 		Progress:     s.SearchState.Progress,
 		CurrentOp:    s.SearchState.CurrentOp,
 	}
+}
+
+// AddToast adds a new toast notification (thread-safe)
+func (s *AppState) AddToast(message string, toastType ToastType, duration time.Duration) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	id := fmt.Sprintf("toast_%d", time.Now().UnixNano())
+	toast := ToastNotification{
+		ID:        id,
+		Message:   message,
+		Type:      toastType,
+		StartTime: time.Now(),
+		Duration:  duration,
+	}
+	
+	s.ActiveToasts = append(s.ActiveToasts, toast)
+	
+	// Clean up expired toasts
+	s.cleanupExpiredToasts()
+	
+	return id
+}
+
+// RemoveToast removes a toast notification by ID (thread-safe)
+func (s *AppState) RemoveToast(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	for i, toast := range s.ActiveToasts {
+		if toast.ID == id {
+			s.ActiveToasts = append(s.ActiveToasts[:i], s.ActiveToasts[i+1:]...)
+			break
+		}
+	}
+}
+
+// GetActiveToasts returns active toast notifications (thread-safe)
+func (s *AppState) GetActiveToasts() []ToastNotification {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	// Clean up expired toasts
+	s.cleanupExpiredToasts()
+	
+	// Return a copy to avoid race conditions
+	toasts := make([]ToastNotification, len(s.ActiveToasts))
+	copy(toasts, s.ActiveToasts)
+	return toasts
+}
+
+// cleanupExpiredToasts removes expired toasts (must be called with lock held)
+func (s *AppState) cleanupExpiredToasts() {
+	now := time.Now()
+	validToasts := make([]ToastNotification, 0, len(s.ActiveToasts))
+	
+	for _, toast := range s.ActiveToasts {
+		if now.Sub(toast.StartTime) < toast.Duration {
+			validToasts = append(validToasts, toast)
+		}
+	}
+	
+	s.ActiveToasts = validToasts
+}
+
+// SetProgress adds or updates a progress indicator (thread-safe)
+func (s *AppState) SetProgress(id, message string, progress int, indeterminate bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	s.ActiveProgress[id] = ProgressIndicator{
+		ID:            id,
+		Message:       message,
+		Progress:      progress,
+		Indeterminate: indeterminate,
+		StartTime:     time.Now(),
+	}
+}
+
+// RemoveProgress removes a progress indicator (thread-safe)
+func (s *AppState) RemoveProgress(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	delete(s.ActiveProgress, id)
+}
+
+// GetActiveProgress returns active progress indicators (thread-safe)
+func (s *AppState) GetActiveProgress() map[string]ProgressIndicator {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	// Return a copy to avoid race conditions
+	progress := make(map[string]ProgressIndicator, len(s.ActiveProgress))
+	for k, v := range s.ActiveProgress {
+		progress[k] = v
+	}
+	return progress
 }

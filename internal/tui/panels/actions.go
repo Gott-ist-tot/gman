@@ -71,9 +71,27 @@ func (a *ActionsPanel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.lastError = msg.Error
 		a.showResult = true
 		a.resultTimer = time.Now()
-		return a, tea.Tick(time.Second*3, func(t time.Time) tea.Msg {
+		
+		// Hide any active progress indicators
+		cmds := []tea.Cmd{
+			models.ProgressHideCmd("refresh"),
+			models.ProgressHideCmd("sync"),
+			models.ProgressHideCmd("commit"),
+		}
+		
+		// Show success or error toast
+		if msg.Error != nil {
+			cmds = append(cmds, models.ToastErrorCmd(msg.Error.Error()))
+		} else if msg.Result != "" {
+			cmds = append(cmds, models.ToastSuccessCmd(msg.Result))
+		}
+		
+		// Auto-hide result after 3 seconds
+		cmds = append(cmds, tea.Tick(time.Second*3, func(t time.Time) tea.Msg {
 			return models.HideResultMsg{}
-		})
+		}))
+		
+		return a, tea.Batch(cmds...)
 
 	case models.HideResultMsg:
 		a.showResult = false
@@ -334,13 +352,14 @@ func (a *ActionsPanel) renderAction(action Action, index int) string {
 		style = styles.ListItemStyle
 	}
 
-	// Build action text
+	// Build action text with icon
+	icon := styles.GetActionIcon(action.Name)
 	shortcut := ""
 	if action.Shortcut != "" {
 		shortcut = fmt.Sprintf("[%s] ", action.Shortcut)
 	}
 
-	text := fmt.Sprintf("%s%s - %s", shortcut, action.Name, action.Description)
+	text := fmt.Sprintf("%s %s%s - %s", icon, shortcut, action.Name, action.Description)
 
 	if isSelected {
 		text = "▶ " + text
@@ -452,22 +471,36 @@ func (a *ActionsPanel) hasStashes(state *models.AppState) bool {
 
 // Action handlers - these will be implemented to execute actual operations
 func (a *ActionsPanel) handleRefresh(state *models.AppState) tea.Cmd {
-	return func() tea.Msg {
-		return models.ActionCompleteMsg{
-			Result: "Repository status refreshed",
-			Error:  nil,
-		}
-	}
+	return tea.Batch(
+		models.ToastInfoCmd("Refreshing repository status..."),
+		models.ProgressCmd("refresh", "Updating repository status", 0, true),
+		func() tea.Msg {
+			// Simulate refresh work
+			time.Sleep(1 * time.Second)
+			return models.ActionCompleteMsg{
+				Result: "Repository status refreshed",
+				Error:  nil,
+			}
+		},
+	)
 }
 
 func (a *ActionsPanel) handleSync(state *models.AppState) tea.Cmd {
-	return func() tea.Msg {
-		// TODO: Implement actual sync operation
-		return models.ActionCompleteMsg{
-			Result: "Repository synchronized",
-			Error:  nil,
-		}
-	}
+	return tea.Batch(
+		models.ToastInfoCmd("Syncing repository..."),
+		models.ProgressCmd("sync", "Pulling latest changes", 0, false),
+		func() tea.Msg {
+			// Simulate progressive sync work
+			for i := 0; i <= 100; i += 25 {
+				time.Sleep(300 * time.Millisecond)
+				// In a real implementation, we'd send progress updates
+			}
+			return models.ActionCompleteMsg{
+				Result: "Repository synchronized",
+				Error:  nil,
+			}
+		},
+	)
 }
 
 func (a *ActionsPanel) handleCommit(state *models.AppState) tea.Cmd {
