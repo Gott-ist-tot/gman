@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"gman/internal/di"
+	"gman/internal/external"
 	"gman/internal/fzf"
 	"gman/internal/index"
 
@@ -77,26 +78,51 @@ Key bindings in fzf:
 	RunE: runFindCommit,
 }
 
+// findContentCmd represents the find content command using rg
+var findContentCmd = &cobra.Command{
+	Use:   "content <pattern>",
+	Short: "Search file contents across repositories using ripgrep",
+	Long: `Search for text within files across all managed repositories using ripgrep.
+This provides real-time content search with regex support and is much faster
+than traditional file indexing approaches.
+
+Examples:
+  gman find content "TODO"               # Search for TODO comments
+  gman find content "func.*Error"       # Search using regex patterns
+  gman find content "import.*react" --group frontend  # Search in specific group
+  
+Key bindings in fzf:
+  Enter       - Print selected file path with line number
+  Ctrl-C      - Cancel selection`,
+	Args: cobra.ExactArgs(1),
+	RunE: runFindContent,
+}
+
 func init() {
 	// Command is now available via: gman tools find
 	// Removed direct rootCmd registration to avoid duplication
 	findCmd.AddCommand(findFileCmd)
 	findCmd.AddCommand(findCommitCmd)
+	findCmd.AddCommand(findContentCmd)
 
 	// Common flags
 	findCmd.PersistentFlags().StringVar(&findGroupFilter, "group", "", "Filter by repository group")
-	findCmd.PersistentFlags().BoolVar(&findRebuildIndex, "rebuild", false, "Force rebuild the search index")
+	findCmd.PersistentFlags().BoolVar(&findRebuildIndex, "rebuild", false, "Force rebuild the search index (only affects commit search)")
 
 	// File-specific flags
 	findFileCmd.Flags().StringVar(&findEditor, "editor", "", "Editor to use when opening files (default: $EDITOR)")
+	
+	// Content-specific flags
+	findContentCmd.Flags().StringVar(&findEditor, "editor", "", "Editor to use when opening files (default: $EDITOR)")
 }
 
 func runFindFile(cmd *cobra.Command, args []string) error {
-	// Check if fzf is available
-	if !fzf.IsAvailable() {
-		fmt.Fprintf(os.Stderr, "%s\n", color.RedString("❌ fzf not found"))
-		fmt.Fprintf(os.Stderr, "%s\n\n", fzf.GetInstallInstructions())
-		return fmt.Errorf("fzf is required for this command")
+	// Check dependencies
+	missingTools := external.CheckDependencies(external.FD, external.FZF)
+	if len(missingTools) > 0 {
+		fmt.Fprintf(os.Stderr, "%s\n", color.RedString("❌ Missing required tools: %s", strings.Join(missingTools, ", ")))
+		fmt.Fprintf(os.Stderr, "%s\n", external.GetMissingToolsMessage(external.FD, external.FZF))
+		return fmt.Errorf("required tools not available")
 	}
 
 	// Load configuration
@@ -107,20 +133,7 @@ func runFindFile(cmd *cobra.Command, args []string) error {
 
 	cfg := configMgr.GetConfig()
 	if len(cfg.Repositories) == 0 {
-		return fmt.Errorf("no repositories configured. Use 'gman add' to add repositories")
-	}
-
-	// Initialize searcher
-	searcher, err := index.NewSearcher(configMgr)
-	if err != nil {
-		return fmt.Errorf("failed to initialize searcher: %w", err)
-	}
-	defer searcher.Close()
-
-	// Ensure index exists
-	fmt.Fprintf(os.Stderr, "%s\n", color.BlueString("🔍 Preparing search index..."))
-	if err := searcher.EnsureIndex(cfg.Repositories, findRebuildIndex); err != nil {
-		return fmt.Errorf("failed to prepare search index: %w", err)
+		return fmt.Errorf("no repositories configured. Use 'gman repo add' to add repositories")
 	}
 
 	// Get initial search query
@@ -129,8 +142,13 @@ func runFindFile(cmd *cobra.Command, args []string) error {
 		initialQuery = args[0]
 	}
 
-	// Search for files
-	results, err := searcher.SearchFiles(initialQuery, findGroupFilter, cfg.Repositories)
+	// Initialize fd searcher
+	searcher := external.NewFDSearcher()
+	
+	fmt.Fprintf(os.Stderr, "%s\n", color.BlueString("🔍 Searching files with fd..."))
+
+	// Search for files using fd
+	results, err := searcher.SearchFiles(initialQuery, cfg.Repositories, findGroupFilter)
 	if err != nil {
 		return fmt.Errorf("failed to search files: %w", err)
 	}
@@ -148,7 +166,8 @@ func runFindFile(cmd *cobra.Command, args []string) error {
 	}
 
 	// Format results for fzf
-	fzfInput := searcher.FormatFileSearchResults(results)
+	fzfInput := searcher.FormatForFZF(results)
+	fzfLines := strings.Split(fzfInput, "\n")
 
 	// Create fzf finder
 	finder, err := fzf.NewFinder()
@@ -156,13 +175,8 @@ func runFindFile(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create fzf finder: %w", err)
 	}
 
-	// Set up preview
-	previewGen := fzf.NewPreviewGenerator()
-	previewCmd := previewGen.BuildFilePreviewCommand(cfg.Repositories)
-
 	// Configure fzf options
 	opts := fzf.DefaultFileOptions()
-	opts.Preview = previewCmd
 	opts.InitialQuery = initialQuery
 
 	// Add header with stats
@@ -175,15 +189,15 @@ func runFindFile(cmd *cobra.Command, args []string) error {
 	// Add key bindings
 	editorCmd := getEditorCommand()
 	if editorCmd != "" {
-		// Create editor binding that opens the file
-		editorBinding := fmt.Sprintf("ctrl-o:execute(%s {2})", editorCmd)
+		// Create editor binding that opens the file using the full path
+		editorBinding := fmt.Sprintf("ctrl-o:execute(%s {1})", editorCmd)
 		opts.BindKeys = []string{editorBinding}
 	}
 
-	fmt.Fprintf(os.Stderr, "%s\n", color.GreenString("✅ Index ready. Launching fzf..."))
+	fmt.Fprintf(os.Stderr, "%s\n", color.GreenString("✅ Search complete. Launching fzf..."))
 
 	// Launch fzf
-	selection, err := finder.FindSingle(fzfInput, opts)
+	selection, err := finder.FindSingle(fzfLines, opts)
 	if err != nil {
 		if strings.Contains(err.Error(), "canceled") {
 			fmt.Fprintf(os.Stderr, "%s\n", color.YellowString("Selection canceled"))
@@ -193,13 +207,13 @@ func runFindFile(cmd *cobra.Command, args []string) error {
 	}
 
 	// Parse selection and get file path
-	selectedResult, err := searcher.ParseFileSelection(selection, results)
+	selectedResult, err := searcher.ParseFZFSelection(selection, results)
 	if err != nil {
 		return fmt.Errorf("failed to parse selection: %w", err)
 	}
 
 	// Output the selected file path
-	fmt.Println(selectedResult.Path)
+	fmt.Println(selectedResult.FullPath)
 	return nil
 }
 
@@ -332,6 +346,105 @@ func getEditorCommand() string {
 	}
 
 	return ""
+}
+
+func runFindContent(cmd *cobra.Command, args []string) error {
+	// Check dependencies
+	missingTools := external.CheckDependencies(external.RipGrep, external.FZF)
+	if len(missingTools) > 0 {
+		fmt.Fprintf(os.Stderr, "%s\n", color.RedString("❌ Missing required tools: %s", strings.Join(missingTools, ", ")))
+		fmt.Fprintf(os.Stderr, "%s\n", external.GetMissingToolsMessage(external.RipGrep, external.FZF))
+		return fmt.Errorf("required tools not available")
+	}
+
+	// Load configuration
+	configMgr := di.ConfigManager()
+	if err := configMgr.Load(); err != nil {
+		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+
+	cfg := configMgr.GetConfig()
+	if len(cfg.Repositories) == 0 {
+		return fmt.Errorf("no repositories configured. Use 'gman repo add' to add repositories")
+	}
+
+	// Get search pattern (required)
+	searchPattern := args[0]
+
+	// Initialize rg searcher
+	searcher := external.NewRGSearcher()
+	
+	fmt.Fprintf(os.Stderr, "%s\n", color.BlueString("🔍 Searching content with ripgrep..."))
+
+	// Search for content using rg
+	results, err := searcher.SearchContent(searchPattern, cfg.Repositories, findGroupFilter)
+	if err != nil {
+		return fmt.Errorf("failed to search content: %w", err)
+	}
+
+	if len(results) == 0 {
+		fmt.Printf("%s No content found", color.YellowString("⚠️"))
+		fmt.Printf(" matching '%s'", searchPattern)
+		if findGroupFilter != "" {
+			fmt.Printf(" in group '%s'", findGroupFilter)
+		}
+		fmt.Println()
+		return nil
+	}
+
+	// Format results for fzf
+	fzfInput := searcher.FormatForFZF(results)
+	fzfLines := strings.Split(fzfInput, "\n")
+
+	// Create fzf finder
+	finder, err := fzf.NewFinder()
+	if err != nil {
+		return fmt.Errorf("failed to create fzf finder: %w", err)
+	}
+
+	// Configure fzf options for content search
+	opts := fzf.DefaultFileOptions()
+	opts.Multi = false
+	opts.Height = "80%"
+	opts.Layout = "reverse"
+	opts.Border = true
+
+	// Add header with stats
+	statsInfo := fmt.Sprintf("Found %d matches for '%s'", len(results), searchPattern)
+	if findGroupFilter != "" {
+		statsInfo += fmt.Sprintf(" in group '%s'", findGroupFilter)
+	}
+	opts.Header = statsInfo + " | Press Enter to select, Ctrl-O to open in editor, Ctrl-C to cancel"
+
+	// Add key bindings
+	editorCmd := getEditorCommand()
+	if editorCmd != "" {
+		// Create editor binding that opens the file at the specific line
+		editorBinding := fmt.Sprintf("ctrl-o:execute(%s {1}:{2})", editorCmd)
+		opts.BindKeys = []string{editorBinding}
+	}
+
+	fmt.Fprintf(os.Stderr, "%s\n", color.GreenString("✅ Search complete. Launching fzf..."))
+
+	// Launch fzf
+	selection, err := finder.FindSingle(fzfLines, opts)
+	if err != nil {
+		if strings.Contains(err.Error(), "canceled") {
+			fmt.Fprintf(os.Stderr, "%s\n", color.YellowString("Selection canceled"))
+			return nil
+		}
+		return fmt.Errorf("fzf selection failed: %w", err)
+	}
+
+	// Parse selection and get file path with line number
+	selectedResult, err := searcher.ParseFZFSelection(selection, results)
+	if err != nil {
+		return fmt.Errorf("failed to parse selection: %w", err)
+	}
+
+	// Output the selected file path with line number for easy editor navigation
+	fmt.Printf("%s:%d\n", selectedResult.FilePath, selectedResult.LineNumber)
+	return nil
 }
 
 // Helper function to check if a command exists

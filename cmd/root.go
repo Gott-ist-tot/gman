@@ -24,7 +24,6 @@ var rootCmd = &cobra.Command{
 📁 COMMAND GROUPS (with shortcuts):
   gman repo    (r)                    # Repository management (add, remove, list, groups)
   gman work    (w)                    # Git workflow (status, sync, commit, push, branch)
-  gman quick   (q)                    # Quick access to common operations
   gman tools   (t)                    # Advanced tools (search, dashboard, worktree, setup)
 
 🔧 BATCH OPERATIONS:
