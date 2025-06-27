@@ -1,7 +1,10 @@
 package external
 
 import (
+	"bufio"
 	"fmt"
+	"os/exec"
+	"strings"
 
 	"github.com/fatih/color"
 )
@@ -119,14 +122,94 @@ func (ss *SmartSearcher) SelectFromResults(results []FileResult, prompt string) 
 
 // selectWithFZF uses fzf for interactive file selection
 func (ss *SmartSearcher) selectWithFZF(results []FileResult, prompt string) (*FileResult, error) {
-	// TODO: Implement fzf integration
-	// For now, fall back to basic selection
-	if ss.verbose {
-		fmt.Printf("🔄 FZF integration not yet implemented, using basic selection...\n")
+	if !FZF.IsAvailable() {
+		return nil, fmt.Errorf("fzf is not available")
 	}
-	
-	basicSelector := NewBasicSelector()
-	return basicSelector.SelectFromResults(results, prompt)
+
+	// Format results for fzf input
+	formattedInput := ss.FormatForFZF(results)
+	if formattedInput == "" {
+		return nil, fmt.Errorf("no results to display")
+	}
+
+	// Create fzf command with enhanced options
+	fzfCmd := exec.Command("fzf",
+		"--height", "50%",           // Use 50% of terminal height
+		"--reverse",                 // Display from top to bottom
+		"--border",                  // Add border for better visibility
+		"--prompt", prompt+" > ",    // Custom prompt
+		"--preview-window", "right:50%:wrap", // Preview window settings
+		"--bind", "ctrl-c:abort",    // Handle Ctrl+C gracefully
+		"--no-multi",                // Single selection mode
+		"--cycle",                   // Allow cycling through results
+		"--inline-info",             // Show info inline
+	)
+
+	// Set up pipes for communication
+	stdin, err := fzfCmd.StdinPipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stdin pipe: %w", err)
+	}
+
+	stdout, err := fzfCmd.StdoutPipe()
+	if err != nil {
+		stdin.Close()
+		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+
+	// Start the fzf process
+	if err := fzfCmd.Start(); err != nil {
+		stdin.Close()
+		stdout.Close()
+		return nil, fmt.Errorf("failed to start fzf: %w", err)
+	}
+
+	// Send formatted results to fzf
+	go func() {
+		defer stdin.Close()
+		fmt.Fprint(stdin, formattedInput)
+	}()
+
+	// Read the selection from fzf
+	var selection string
+	scanner := bufio.NewScanner(stdout)
+	if scanner.Scan() {
+		selection = strings.TrimSpace(scanner.Text())
+	}
+
+	// Wait for fzf to complete
+	err = fzfCmd.Wait()
+	stdout.Close()
+
+	// Handle different exit scenarios
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			switch exitErr.ExitCode() {
+			case 1: // No selection made or interrupted
+				return nil, fmt.Errorf("selection cancelled")
+			case 2: // Error in fzf
+				return nil, fmt.Errorf("fzf error: %w", err)
+			case 130: // SIGINT (Ctrl+C)
+				return nil, fmt.Errorf("selection interrupted")
+			default:
+				return nil, fmt.Errorf("fzf exited with code %d", exitErr.ExitCode())
+			}
+		}
+		return nil, fmt.Errorf("fzf execution failed: %w", err)
+	}
+
+	// Handle empty selection
+	if selection == "" {
+		return nil, fmt.Errorf("no selection made")
+	}
+
+	// Parse the fzf selection back to FileResult
+	selectedResult, err := ss.ParseFZFSelection(selection, results)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse selection '%s': %w", selection, err)
+	}
+
+	return selectedResult, nil
 }
 
 // showToolMissingMessage displays a helpful message about missing tools

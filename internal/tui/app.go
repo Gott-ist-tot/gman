@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"gman/internal/config"
+	"gman/internal/external"
 	"gman/internal/fzf"
 	"gman/internal/index"
 	"gman/internal/tui/models"
@@ -589,14 +590,6 @@ func (a *App) launchFzfSearch(mode models.SearchMode, query string) tea.Cmd {
 
 // performAsyncSearch performs the search operation asynchronously
 func (a *App) performAsyncSearch(ctx context.Context, mode models.SearchMode, query string) {
-	// Create searcher
-	searcher, err := index.NewSearcher(a.state.ConfigManager)
-	if err != nil {
-		a.sendSearchError(mode, query, fmt.Errorf("failed to create searcher: %w", err))
-		return
-	}
-	defer searcher.Close()
-
 	// Get repositories from state safely
 	repos := a.state.Repositories
 	
@@ -609,41 +602,100 @@ func (a *App) performAsyncSearch(ctx context.Context, mode models.SearchMode, qu
 		return
 	}
 
-	// Perform the search
-	var searchResults []index.SearchResult
-	
 	switch mode {
 	case models.SearchFiles:
-		a.sendSearchProgress(mode, query, 30, "Searching files...", nil)
-		searchResults, err = a.searchWithProgress(ctx, func() ([]index.SearchResult, error) {
-			return searcher.SearchFiles("", "", repos)
-		}, mode, query)
+		// Use new SmartSearcher for file search
+		a.performFileSearch(ctx, query, repos)
 	case models.SearchCommits:
-		a.sendSearchProgress(mode, query, 30, "Searching commits...", nil)
-		searchResults, err = a.searchWithProgress(ctx, func() ([]index.SearchResult, error) {
-			return searcher.SearchCommits("", "", repos)
-		}, mode, query)
+		// Keep using index searcher for commits (different infrastructure)
+		a.performCommitSearch(ctx, query, repos)
 	}
+}
 
+// performFileSearch performs file search using the new SmartSearcher
+func (a *App) performFileSearch(ctx context.Context, query string, repos map[string]string) {
+	a.sendSearchProgress(models.SearchFiles, query, 30, "Searching files with SmartSearcher...", nil)
+	
+	// Create SmartSearcher with verbose=false for TUI
+	smartSearcher := external.NewSmartSearcher(false)
+	
+	// Get current group filter from app state if available
+	groupFilter := "" // TODO: Implement group filter in TUI state
+	
+	// Perform the search
+	fileResults, err := smartSearcher.SearchFiles(query, repos, groupFilter)
+	if err != nil {
+		a.sendSearchError(models.SearchFiles, query, fmt.Errorf("file search failed: %w", err))
+		return
+	}
+	
 	// Check for cancellation after search
 	if ctx.Err() != nil {
-		a.sendSearchCancelled(mode, query)
+		a.sendSearchCancelled(models.SearchFiles, query)
+		return
+	}
+	
+	// Convert file results to SearchResultItem
+	a.sendSearchProgress(models.SearchFiles, query, 90, "Processing file results...", nil)
+	
+	results := make([]models.SearchResultItem, len(fileResults))
+	for i, result := range fileResults {
+		// Check for cancellation during conversion
+		if ctx.Err() != nil {
+			a.sendSearchCancelled(models.SearchFiles, query)
+			return
+		}
+		
+		results[i] = models.SearchResultItem{
+			Type:        "file",
+			Repository:  result.RepoAlias,
+			Path:        result.FullPath,
+			Hash:        "", // Not applicable for files
+			DisplayText: result.DisplayText,
+			PreviewData: result.RelativePath, // Use relative path for preview
+		}
+	}
+	
+	// Send final results
+	a.sendSearchComplete(models.SearchFiles, query, results)
+}
+
+// performCommitSearch performs commit search using the original index system
+func (a *App) performCommitSearch(ctx context.Context, query string, repos map[string]string) {
+	// Create index searcher for commit search
+	searcher, err := index.NewSearcher(a.state.ConfigManager)
+	if err != nil {
+		a.sendSearchError(models.SearchCommits, query, fmt.Errorf("failed to create commit searcher: %w", err))
+		return
+	}
+	defer searcher.Close()
+	
+	a.sendSearchProgress(models.SearchCommits, query, 30, "Searching commits...", nil)
+	
+	// Perform commit search using existing index system
+	searchResults, err := a.searchWithProgress(ctx, func() ([]index.SearchResult, error) {
+		return searcher.SearchCommits("", query, repos)
+	}, models.SearchCommits, query)
+	
+	// Check for cancellation after search
+	if ctx.Err() != nil {
+		a.sendSearchCancelled(models.SearchCommits, query)
 		return
 	}
 
 	if err != nil {
-		a.sendSearchError(mode, query, fmt.Errorf("search failed: %w", err))
+		a.sendSearchError(models.SearchCommits, query, fmt.Errorf("commit search failed: %w", err))
 		return
 	}
 
 	// Convert results
-	a.sendSearchProgress(mode, query, 90, "Processing results...", nil)
+	a.sendSearchProgress(models.SearchCommits, query, 90, "Processing commit results...", nil)
 	
 	results := make([]models.SearchResultItem, len(searchResults))
 	for i, result := range searchResults {
 		// Check for cancellation during conversion
 		if ctx.Err() != nil {
-			a.sendSearchCancelled(mode, query)
+			a.sendSearchCancelled(models.SearchCommits, query)
 			return
 		}
 		
@@ -658,7 +710,7 @@ func (a *App) performAsyncSearch(ctx context.Context, mode models.SearchMode, qu
 	}
 
 	// Send final results
-	a.sendSearchComplete(mode, query, results)
+	a.sendSearchComplete(models.SearchCommits, query, results)
 }
 
 // searchWithProgress wraps search operations with progress updates

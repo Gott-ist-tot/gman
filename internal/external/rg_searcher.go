@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"gman/internal/di"
 )
 
 // ContentResult represents a content search result from rg
@@ -47,8 +49,15 @@ func (rs *RGSearcher) SearchContent(pattern string, repositories map[string]stri
 	// Filter repositories by group if specified
 	reposToSearch := repositories
 	if groupFilter != "" {
-		// TODO: Add group filtering logic when needed
-		// For now, we'll search all repositories
+		configMgr := di.ConfigManager()
+		groupRepos, err := configMgr.GetGroupRepositories(groupFilter)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get group repositories: %w", err)
+		}
+		if len(groupRepos) == 0 {
+			return []ContentResult{}, nil // Empty group, return empty results
+		}
+		reposToSearch = groupRepos
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), rs.timeout)

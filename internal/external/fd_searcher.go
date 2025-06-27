@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"gman/internal/di"
 )
 
 // FileResult represents a file search result from fd
@@ -40,8 +42,15 @@ func (fs *FDSearcher) SearchFiles(pattern string, repositories map[string]string
 	// Filter repositories by group if specified
 	reposToSearch := repositories
 	if groupFilter != "" {
-		// TODO: Add group filtering logic when needed
-		// For now, we'll search all repositories
+		configMgr := di.ConfigManager()
+		groupRepos, err := configMgr.GetGroupRepositories(groupFilter)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get group repositories: %w", err)
+		}
+		if len(groupRepos) == 0 {
+			return []FileResult{}, nil // Empty group, return empty results
+		}
+		reposToSearch = groupRepos
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), fs.timeout)
