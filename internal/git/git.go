@@ -123,6 +123,34 @@ func (g *Manager) getRepoStatusInternal(alias, path string, withFetch bool) type
 	}
 	status.CommitTime = commitTime
 
+	// Get enhanced status information (non-blocking)
+	// Remote URL
+	if remoteURL, err := g.GetRemoteURL(path); err == nil {
+		status.RemoteURL = remoteURL
+	}
+
+	// Remote branch
+	if remoteBranch, err := g.GetRemoteBranch(path); err == nil {
+		status.RemoteBranch = remoteBranch
+	}
+
+	// Stash count
+	if stashCount, err := g.GetStashCount(path); err == nil {
+		status.StashCount = stashCount
+	}
+
+	// Branch counts
+	if local, remote, total, err := g.GetBranchCounts(path); err == nil {
+		status.LocalBranches = local
+		status.RemoteBranches = remote
+		status.TotalBranches = total
+	}
+
+	// Last fetch time
+	if fetchTime, err := g.GetLastFetchTime(path); err == nil {
+		status.LastFetchTime = fetchTime
+	}
+
 	return status
 }
 
@@ -838,6 +866,78 @@ func (g *Manager) StashList(path string) ([]string, error) {
 // StashClear removes all stashes
 func (g *Manager) StashClear(path string) error {
 	return g.runGitCommand(path, "stash", "clear")
+}
+
+// GetRemoteURL returns the URL of the origin remote
+func (g *Manager) GetRemoteURL(path string) (string, error) {
+	output, err := g.RunCommand(path, "remote", "get-url", "origin")
+	if err != nil {
+		return "", fmt.Errorf("failed to get remote URL: %w", err)
+	}
+	return strings.TrimSpace(output), nil
+}
+
+// GetRemoteBranch returns the tracking remote branch for the current branch
+func (g *Manager) GetRemoteBranch(path string) (string, error) {
+	// Get current branch
+	currentBranch, err := g.GetCurrentBranch(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to get current branch: %w", err)
+	}
+	
+	// Get the upstream branch
+	output, err := g.RunCommand(path, "rev-parse", "--abbrev-ref", currentBranch+"@{upstream}")
+	if err != nil {
+		// No upstream configured
+		return "", nil
+	}
+	return strings.TrimSpace(output), nil
+}
+
+// GetStashCount returns the number of stashes
+func (g *Manager) GetStashCount(path string) (int, error) {
+	stashes, err := g.StashList(path)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get stash count: %w", err)
+	}
+	return len(stashes), nil
+}
+
+// GetBranchCounts returns counts of local and remote branches
+func (g *Manager) GetBranchCounts(path string) (local, remote, total int, err error) {
+	// Get all branches including remotes
+	allBranches, err := g.GetBranches(path, true)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("failed to get branches: %w", err)
+	}
+	
+	localCount := 0
+	remoteCount := 0
+	
+	for _, branch := range allBranches {
+		if strings.HasPrefix(branch, "remotes/") {
+			remoteCount++
+		} else {
+			localCount++
+		}
+	}
+	
+	return localCount, remoteCount, localCount + remoteCount, nil
+}
+
+// GetLastFetchTime returns the time of the last fetch operation
+func (g *Manager) GetLastFetchTime(path string) (time.Time, error) {
+	// Check the modification time of .git/FETCH_HEAD
+	fetchHeadPath := filepath.Join(path, ".git", "FETCH_HEAD")
+	info, err := os.Stat(fetchHeadPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// No fetch has been performed yet
+			return time.Time{}, nil
+		}
+		return time.Time{}, fmt.Errorf("failed to check FETCH_HEAD: %w", err)
+	}
+	return info.ModTime(), nil
 }
 
 // DiffFileBetweenBranches compares a specific file between two branches

@@ -12,8 +12,9 @@ import (
 
 // StatusDisplayer handles displaying repository status in a nice format
 type StatusDisplayer struct {
-	showLastCommit bool
-	showExtended   bool // Show additional info like files changed and commit time
+	showLastCommit   bool
+	showExtended     bool // Show additional info like files changed and commit time
+	showSuperExtended bool // Show enhanced info like remote URL, stash count, branch counts
 }
 
 // NewStatusDisplayer creates a new status displayer
@@ -32,6 +33,15 @@ func NewExtendedStatusDisplayer(showLastCommit bool) *StatusDisplayer {
 	}
 }
 
+// NewSuperExtendedStatusDisplayer creates a new status displayer with all enhanced info
+func NewSuperExtendedStatusDisplayer(showLastCommit bool) *StatusDisplayer {
+	return &StatusDisplayer{
+		showLastCommit:   showLastCommit,
+		showExtended:     true,
+		showSuperExtended: true,
+	}
+}
+
 // Display shows the repository status in a formatted table
 func (d *StatusDisplayer) Display(statuses []types.RepoStatus) {
 	if len(statuses) == 0 {
@@ -47,6 +57,9 @@ func (d *StatusDisplayer) Display(statuses []types.RepoStatus) {
 	maxCommit := len("Last Commit")
 	maxFiles := len("Files")
 	maxTime := len("Last Commit")
+	maxRemote := len("Remote")
+	maxStash := len("Stash")
+	maxBranches := len("Branches")
 
 	for _, status := range statuses {
 		if len(status.Alias) > maxAlias {
@@ -76,6 +89,20 @@ func (d *StatusDisplayer) Display(statuses []types.RepoStatus) {
 				maxTime = len(timeStr)
 			}
 		}
+		if d.showSuperExtended {
+			remoteStr := d.formatRemote(status.RemoteURL, status.RemoteBranch)
+			if len(stripAnsiCodes(remoteStr)) > maxRemote {
+				maxRemote = len(stripAnsiCodes(remoteStr))
+			}
+			stashStr := fmt.Sprintf("%d", status.StashCount)
+			if len(stashStr) > maxStash {
+				maxStash = len(stashStr)
+			}
+			branchStr := fmt.Sprintf("%d/%d", status.LocalBranches, status.RemoteBranches)
+			if len(branchStr) > maxBranches {
+				maxBranches = len(branchStr)
+			}
+		}
 	}
 
 	// Add padding
@@ -90,6 +117,11 @@ func (d *StatusDisplayer) Display(statuses []types.RepoStatus) {
 		maxFiles += 2
 		maxTime += 2
 	}
+	if d.showSuperExtended {
+		maxRemote += 2
+		maxStash += 2
+		maxBranches += 2
+	}
 
 	// Print header with colors
 	fmt.Printf("%-*s %-*s %-*s %-*s",
@@ -97,7 +129,14 @@ func (d *StatusDisplayer) Display(statuses []types.RepoStatus) {
 		maxBranch, color.CyanString("Branch"),
 		maxWorkspace, color.CyanString("Workspace"),
 		maxSync, color.CyanString("Sync Status"))
-	if d.showExtended {
+	if d.showSuperExtended {
+		fmt.Printf(" %-*s %-*s %-*s %-*s %-*s", 
+			maxFiles, color.CyanString("Files"), 
+			maxTime, color.CyanString("Last Commit"),
+			maxRemote, color.CyanString("Remote"),
+			maxStash, color.CyanString("Stash"),
+			maxBranches, color.CyanString("Branches"))
+	} else if d.showExtended {
 		fmt.Printf(" %-*s %-*s", maxFiles, color.CyanString("Files"), maxTime, color.CyanString("Last Commit"))
 	} else if d.showLastCommit {
 		fmt.Printf(" %-*s", maxCommit, color.CyanString("Last Commit"))
@@ -110,7 +149,14 @@ func (d *StatusDisplayer) Display(statuses []types.RepoStatus) {
 		strings.Repeat("─", maxBranch),
 		strings.Repeat("─", maxWorkspace),
 		strings.Repeat("─", maxSync))
-	if d.showExtended {
+	if d.showSuperExtended {
+		fmt.Printf(" %s %s %s %s %s", 
+			strings.Repeat("─", maxFiles), 
+			strings.Repeat("─", maxTime),
+			strings.Repeat("─", maxRemote),
+			strings.Repeat("─", maxStash),
+			strings.Repeat("─", maxBranches))
+	} else if d.showExtended {
 		fmt.Printf(" %s %s", strings.Repeat("─", maxFiles), strings.Repeat("─", maxTime))
 	} else if d.showLastCommit {
 		fmt.Printf(" %s", strings.Repeat("─", maxCommit))
@@ -125,7 +171,9 @@ func (d *StatusDisplayer) Display(statuses []types.RepoStatus) {
 				maxBranch, color.RedString("ERROR"),
 				maxWorkspace, color.RedString(truncateString(status.Error.Error(), maxWorkspace-2)),
 				maxSync, "")
-			if d.showExtended {
+			if d.showSuperExtended {
+				fmt.Printf(" %-*s %-*s %-*s %-*s %-*s", maxFiles, "", maxTime, "", maxRemote, "", maxStash, "", maxBranches, "")
+			} else if d.showExtended {
 				fmt.Printf(" %-*s %-*s", maxFiles, "", maxTime, "")
 			} else if d.showLastCommit {
 				fmt.Printf(" %-*s", maxCommit, "")
@@ -140,7 +188,24 @@ func (d *StatusDisplayer) Display(statuses []types.RepoStatus) {
 			maxWorkspace, status.Workspace.String(),
 			maxSync, status.SyncStatus.String())
 
-		if d.showExtended {
+		if d.showSuperExtended {
+			filesDisplay := ""
+			if status.FilesChanged > 0 {
+				filesDisplay = color.YellowString("%d", status.FilesChanged)
+			} else {
+				filesDisplay = color.GreenString("0")
+			}
+			timeDisplay := formatCommitTime(status.CommitTime)
+			remoteDisplay := d.formatRemote(status.RemoteURL, status.RemoteBranch)
+			stashDisplay := d.formatStash(status.StashCount)
+			branchDisplay := d.formatBranches(status.LocalBranches, status.RemoteBranches)
+			fmt.Printf(" %-*s %-*s %-*s %-*s %-*s", 
+				maxFiles, filesDisplay, 
+				maxTime, timeDisplay,
+				maxRemote, remoteDisplay,
+				maxStash, stashDisplay,
+				maxBranches, branchDisplay)
+		} else if d.showExtended {
 			filesDisplay := ""
 			if status.FilesChanged > 0 {
 				filesDisplay = color.YellowString("%d", status.FilesChanged)
@@ -285,4 +350,54 @@ func formatCommitTime(t time.Time) string {
 	} else {
 		return t.Format("Jan 2")
 	}
+}
+
+// formatRemote formats the remote URL and branch information
+func (d *StatusDisplayer) formatRemote(remoteURL, remoteBranch string) string {
+	if remoteURL == "" {
+		return color.RedString("NO REMOTE")
+	}
+	
+	// Shorten GitHub URLs for better display
+	if strings.Contains(remoteURL, "github.com") {
+		parts := strings.Split(remoteURL, "/")
+		if len(parts) >= 2 {
+			shortName := parts[len(parts)-2] + "/" + strings.TrimSuffix(parts[len(parts)-1], ".git")
+			if remoteBranch != "" {
+				return color.CyanString("%s→%s", shortName, remoteBranch)
+			}
+			return color.CyanString(shortName)
+		}
+	}
+	
+	// For other URLs, show last part
+	parts := strings.Split(strings.TrimSuffix(remoteURL, ".git"), "/")
+	if len(parts) > 0 {
+		shortName := parts[len(parts)-1]
+		if remoteBranch != "" {
+			return color.CyanString("%s→%s", shortName, remoteBranch)
+		}
+		return color.CyanString(shortName)
+	}
+	
+	return color.CyanString("remote")
+}
+
+// formatStash formats the stash count
+func (d *StatusDisplayer) formatStash(stashCount int) string {
+	if stashCount == 0 {
+		return color.GreenString("0")
+	} else if stashCount > 5 {
+		return color.RedString("%d", stashCount)
+	} else {
+		return color.YellowString("%d", stashCount)
+	}
+}
+
+// formatBranches formats the branch counts (local/remote)
+func (d *StatusDisplayer) formatBranches(local, remote int) string {
+	if local == 0 && remote == 0 {
+		return color.RedString("0/0")
+	}
+	return color.CyanString("%d/%d", local, remote)
 }

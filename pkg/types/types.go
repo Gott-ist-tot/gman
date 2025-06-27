@@ -78,6 +78,15 @@ type RepoStatus struct {
 	FilesChanged  int           // Number of changed files
 	CommitTime    time.Time     // Time of last commit
 	Error         error
+	
+	// Enhanced status information
+	RemoteURL       string        // URL of the remote origin
+	RemoteBranch    string        // Name of the tracking remote branch
+	StashCount      int           // Number of stashes
+	TotalBranches   int           // Total number of branches (local + remote)
+	LocalBranches   int           // Number of local branches
+	RemoteBranches  int           // Number of remote branches
+	LastFetchTime   time.Time     // Time of last fetch operation
 }
 
 // RecentEntry represents a recently used repository
