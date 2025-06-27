@@ -7,6 +7,7 @@ import (
 
 	"gman/internal/di"
 	"gman/internal/display"
+	"gman/internal/errors"
 
 	"github.com/spf13/cobra"
 )
@@ -43,7 +44,9 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		var err error
 		path, err = os.Getwd()
 		if err != nil {
-			return fmt.Errorf("failed to get current directory: %w", err)
+			return errors.Wrap(err, errors.ErrTypeInternal, 
+				"failed to get current directory").
+				WithSuggestion("Ensure you have read permissions for the current directory")
 		}
 		alias = generateAlias(path)
 	case 1:
@@ -53,7 +56,9 @@ func runAdd(cmd *cobra.Command, args []string) error {
 			var err error
 			path, err = os.Getwd()
 			if err != nil {
-				return fmt.Errorf("failed to get current directory: %w", err)
+				return errors.Wrap(err, errors.ErrTypeInternal, 
+					"failed to get current directory").
+					WithSuggestion("Ensure you have read permissions for the current directory")
 			}
 		}
 		alias = generateAlias(path)
@@ -65,7 +70,9 @@ func runAdd(cmd *cobra.Command, args []string) error {
 			var err error
 			path, err = os.Getwd()
 			if err != nil {
-				return fmt.Errorf("failed to get current directory: %w", err)
+				return errors.Wrap(err, errors.ErrTypeInternal, 
+					"failed to get current directory").
+					WithSuggestion("Ensure you have read permissions for the current directory")
 			}
 		}
 	}
@@ -73,13 +80,14 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	// Load configuration
 	configMgr := di.ConfigManager()
 	if err := configMgr.Load(); err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
+		return errors.Wrap(err, errors.ErrTypeConfigInvalid, "failed to load configuration").
+			WithSuggestion("Run 'gman setup' to create or repair configuration")
 	}
 
 	// Check if alias already exists
 	cfg := configMgr.GetConfig()
 	if _, exists := cfg.Repositories[alias]; exists {
-		return fmt.Errorf("alias '%s' already exists", alias)
+		return errors.NewRepoAlreadyExistsError(alias)
 	}
 
 	// Add repository

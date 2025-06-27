@@ -117,14 +117,6 @@ func init() {
 }
 
 func runFindFile(cmd *cobra.Command, args []string) error {
-	// Check dependencies
-	missingTools := external.CheckDependencies(external.FD, external.FZF)
-	if len(missingTools) > 0 {
-		fmt.Fprintf(os.Stderr, "%s\n", color.RedString("❌ Missing required tools: %s", strings.Join(missingTools, ", ")))
-		fmt.Fprintf(os.Stderr, "%s\n", external.GetMissingToolsMessage(external.FD, external.FZF))
-		return fmt.Errorf("required tools not available")
-	}
-
 	// Load configuration
 	configMgr := di.ConfigManager()
 	if err := configMgr.Load(); err != nil {
@@ -142,12 +134,23 @@ func runFindFile(cmd *cobra.Command, args []string) error {
 		initialQuery = args[0]
 	}
 
-	// Initialize fd searcher
-	searcher := external.NewFDSearcher()
+	// Initialize smart searcher (automatically handles fallbacks)
+	verbose := cmd.Flag("verbose") != nil && cmd.Flag("verbose").Value.String() == "true"
+	searcher := external.NewSmartSearcher(verbose)
 	
-	fmt.Fprintf(os.Stderr, "%s\n", color.BlueString("🔍 Searching files with fd..."))
+	// Show optimization tips if tools are missing
+	if searcher.GetDiagnostics().GetReadiness() < 100 {
+		fmt.Fprintf(os.Stderr, "⚡ %s file search (tool availability: %d%%)\n", 
+			color.BlueString("Starting"), searcher.GetDiagnostics().GetReadiness())
+		if verbose {
+			searcher.ShowOptimizationTips()
+			fmt.Fprintln(os.Stderr)
+		}
+	} else {
+		fmt.Fprintf(os.Stderr, "%s\n", color.BlueString("🔍 Searching files with optimized tools..."))
+	}
 
-	// Search for files using fd
+	// Search for files using intelligent search strategy
 	results, err := searcher.SearchFiles(initialQuery, cfg.Repositories, findGroupFilter)
 	if err != nil {
 		return fmt.Errorf("failed to search files: %w", err)
@@ -165,55 +168,22 @@ func runFindFile(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Format results for fzf
-	fzfInput := searcher.FormatForFZF(results)
-	fzfLines := strings.Split(fzfInput, "\n")
+	fmt.Fprintf(os.Stderr, "%s Found %d files. Starting selection...\n", 
+		color.GreenString("✅"), len(results))
 
-	// Create fzf finder
-	finder, err := fzf.NewFinder()
+	// Use intelligent selection (fzf or fallback)
+	prompt := fmt.Sprintf("📁 Select a file to view (%d results)", len(results))
+	selectedFile, err := searcher.SelectFromResults(results, prompt)
 	if err != nil {
-		return fmt.Errorf("failed to create fzf finder: %w", err)
-	}
-
-	// Configure fzf options
-	opts := fzf.DefaultFileOptions()
-	opts.InitialQuery = initialQuery
-
-	// Add header with stats
-	statsInfo := fmt.Sprintf("Found %d files", len(results))
-	if findGroupFilter != "" {
-		statsInfo += fmt.Sprintf(" in group '%s'", findGroupFilter)
-	}
-	opts.Header = statsInfo + " | Press Enter to select, Ctrl-O to open in editor, Ctrl-C to cancel"
-
-	// Add key bindings
-	editorCmd := getEditorCommand()
-	if editorCmd != "" {
-		// Create editor binding that opens the file using the full path
-		editorBinding := fmt.Sprintf("ctrl-o:execute(%s {1})", editorCmd)
-		opts.BindKeys = []string{editorBinding}
-	}
-
-	fmt.Fprintf(os.Stderr, "%s\n", color.GreenString("✅ Search complete. Launching fzf..."))
-
-	// Launch fzf
-	selection, err := finder.FindSingle(fzfLines, opts)
-	if err != nil {
-		if strings.Contains(err.Error(), "canceled") {
-			fmt.Fprintf(os.Stderr, "%s\n", color.YellowString("Selection canceled"))
+		if strings.Contains(err.Error(), "cancelled") {
+			fmt.Println("Selection cancelled.")
 			return nil
 		}
-		return fmt.Errorf("fzf selection failed: %w", err)
-	}
-
-	// Parse selection and get file path
-	selectedResult, err := searcher.ParseFZFSelection(selection, results)
-	if err != nil {
-		return fmt.Errorf("failed to parse selection: %w", err)
+		return fmt.Errorf("selection failed: %w", err)
 	}
 
 	// Output the selected file path
-	fmt.Println(selectedResult.FullPath)
+	fmt.Println(selectedFile.FullPath)
 	return nil
 }
 

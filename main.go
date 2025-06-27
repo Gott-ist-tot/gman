@@ -1,15 +1,12 @@
 package main
 
 import (
-	"fmt"
-	"os"
-
 	"gman/cmd"
+	"gman/internal/errors"
 )
 
 func main() {
 	if err := cmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		errors.Exit(err)
 	}
 }

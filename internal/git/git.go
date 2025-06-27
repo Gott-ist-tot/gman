@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"gman/internal/errors"
 	"gman/pkg/types"
 )
 
@@ -45,7 +46,11 @@ func (g *Manager) getRepoStatusInternal(alias, path string, withFetch bool) type
 
 	// Check if path exists and is a git repository
 	if !g.isGitRepository(path) {
-		status.Error = fmt.Errorf("path '%s' is not a git repository", path)
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			status.Error = errors.NewRepoNotFoundError(path)
+		} else {
+			status.Error = errors.NewNotGitRepoError(path)
+		}
 		return status
 	}
 
@@ -55,7 +60,10 @@ func (g *Manager) getRepoStatusInternal(alias, path string, withFetch bool) type
 	// Get current branch
 	branch, err := g.getCurrentBranch(path)
 	if err != nil {
-		status.Error = fmt.Errorf("failed to get current branch for '%s': %w", path, err)
+		status.Error = errors.Wrap(err, errors.ErrTypeInternal, 
+			fmt.Sprintf("failed to get current branch for repository: %s", alias)).
+			WithContext("repository", path).
+			WithSuggestion("Verify the repository is in a valid state")
 		return status
 	}
 	status.Branch = branch
@@ -63,7 +71,10 @@ func (g *Manager) getRepoStatusInternal(alias, path string, withFetch bool) type
 	// Get workspace status
 	workspaceStatus, err := g.getWorkspaceStatus(path)
 	if err != nil {
-		status.Error = fmt.Errorf("failed to get workspace status for '%s': %w", path, err)
+		status.Error = errors.Wrap(err, errors.ErrTypeInternal,
+			fmt.Sprintf("failed to get workspace status for repository: %s", alias)).
+			WithContext("repository", path).
+			WithSuggestion("Check if the repository working directory is accessible")
 		return status
 	}
 	status.Workspace = workspaceStatus
@@ -71,7 +82,16 @@ func (g *Manager) getRepoStatusInternal(alias, path string, withFetch bool) type
 	// Get sync status
 	syncStatus, err := g.getSyncStatusInternal(path, withFetch)
 	if err != nil {
-		status.Error = fmt.Errorf("failed to get sync status for '%s': %w", path, err)
+		// Sync errors might be network-related, so they're often recoverable
+		if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "connection") {
+			status.Error = errors.NewNetworkTimeoutError("sync status check", "30s").
+				WithCause(err).
+				WithContext("repository", path)
+		} else {
+			status.Error = errors.Wrap(err, errors.ErrTypeRemoteUnreachable,
+				fmt.Sprintf("failed to get sync status for repository: %s", alias)).
+				WithContext("repository", path)
+		}
 		return status
 	}
 	status.SyncStatus = syncStatus
@@ -79,7 +99,10 @@ func (g *Manager) getRepoStatusInternal(alias, path string, withFetch bool) type
 	// Get last commit
 	lastCommit, err := g.getLastCommit(path)
 	if err != nil {
-		status.Error = fmt.Errorf("failed to get last commit for '%s': %w", path, err)
+		status.Error = errors.Wrap(err, errors.ErrTypeInternal,
+			fmt.Sprintf("failed to get last commit for repository: %s", alias)).
+			WithContext("repository", path).
+			WithSuggestion("Verify the repository has at least one commit")
 		return status
 	}
 	status.LastCommit = lastCommit
