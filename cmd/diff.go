@@ -46,27 +46,11 @@ Examples:
   gman diff file myrepo ax65 ax66 -- config/settings.yml
   gman diff file myrepo --tool vimdiff main dev -- src/utils.py`,
 	Args: func(cmd *cobra.Command, args []string) error {
-		// Find the "--" separator
-		dashIndex := -1
-		for i, arg := range args {
-			if arg == "--" {
-				dashIndex = i
-				break
-			}
+		// Check if we have the required number of arguments
+		// Cobra removes the "--" separator, so we expect exactly 4 args
+		if len(args) != 4 {
+			return fmt.Errorf("expected format: <repo> <branch1> <branch2> <file_path> (use -- before file_path in shell)")
 		}
-
-		if dashIndex == -1 {
-			return fmt.Errorf("file path must be specified after '--' separator")
-		}
-
-		if dashIndex != 3 {
-			return fmt.Errorf("expected format: <repo> <branch1> <branch2> -- <file_path>")
-		}
-
-		if len(args) != 5 {
-			return fmt.Errorf("expected format: <repo> <branch1> <branch2> -- <file_path>")
-		}
-
 		return nil
 	},
 	RunE: runDiffFile,
@@ -85,27 +69,11 @@ Examples:
   gman diff cross-repo project-clone1 project-clone2 -- Dockerfile
   gman diff cross-repo backend frontend -- shared/config.json`,
 	Args: func(cmd *cobra.Command, args []string) error {
-		// Find the "--" separator
-		dashIndex := -1
-		for i, arg := range args {
-			if arg == "--" {
-				dashIndex = i
-				break
-			}
+		// Check if we have the required number of arguments
+		// Cobra removes the "--" separator, so we expect exactly 3 args
+		if len(args) != 3 {
+			return fmt.Errorf("expected format: <repo1> <repo2> <file_path> (use -- before file_path in shell)")
 		}
-
-		if dashIndex == -1 {
-			return fmt.Errorf("file path must be specified after '--' separator")
-		}
-
-		if dashIndex != 2 {
-			return fmt.Errorf("expected format: <repo1> <repo2> -- <file_path>")
-		}
-
-		if len(args) != 4 {
-			return fmt.Errorf("expected format: <repo1> <repo2> -- <file_path>")
-		}
-
 		return nil
 	},
 	RunE: runDiffCrossRepo,
@@ -126,7 +94,7 @@ func runDiffFile(cmd *cobra.Command, args []string) error {
 	repoAlias := args[0]
 	branch1 := args[1]
 	branch2 := args[2]
-	filePath := args[4] // After "--"
+	filePath := args[3] // Cobra removes the "--" separator
 
 	// Load configuration
 	configMgr := di.ConfigManager()
@@ -153,9 +121,9 @@ func runDiffFile(cmd *cobra.Command, args []string) error {
 	}
 
 	if output == "" {
-		fmt.Printf("No differences found in '%s' between branches '%s' and '%s'\n", filePath, branch1, branch2)
+		fmt.Fprintf(cmd.OutOrStdout(), "No differences found in '%s' between branches '%s' and '%s'\n", filePath, branch1, branch2)
 	} else {
-		fmt.Print(output)
+		fmt.Fprint(cmd.OutOrStdout(), output)
 	}
 
 	return nil
@@ -164,7 +132,7 @@ func runDiffFile(cmd *cobra.Command, args []string) error {
 func runDiffCrossRepo(cmd *cobra.Command, args []string) error {
 	repo1Alias := args[0]
 	repo2Alias := args[1]
-	filePath := args[3] // After "--"
+	filePath := args[2] // Cobra removes the "--" separator
 
 	// Load configuration
 	configMgr := di.ConfigManager()
@@ -197,9 +165,9 @@ func runDiffCrossRepo(cmd *cobra.Command, args []string) error {
 	}
 
 	if output == "" {
-		fmt.Printf("No differences found in '%s' between repositories '%s' and '%s'\n", filePath, repo1Alias, repo2Alias)
+		fmt.Fprintf(cmd.OutOrStdout(), "No differences found in '%s' between repositories '%s' and '%s'\n", filePath, repo1Alias, repo2Alias)
 	} else {
-		fmt.Print(output)
+		fmt.Fprint(cmd.OutOrStdout(), output)
 	}
 
 	return nil

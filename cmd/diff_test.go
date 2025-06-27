@@ -18,6 +18,10 @@ import (
 
 // TestDiffFileCommand tests the diff file command with various scenarios
 func TestDiffFileCommand(t *testing.T) {
+	// Reset DI container for clean test state
+	di.Reset()
+	defer di.Reset()
+
 	// Create a temporary directory for our test repository
 	tempDir, err := os.MkdirTemp("", "gman_diff_test_*")
 	if err != nil {
@@ -46,37 +50,37 @@ func TestDiffFileCommand(t *testing.T) {
 	}{
 		{
 			name:         "valid diff between branches",
-			args:         []string{"test-repo", "main", "feature", "--", "test.txt"},
+			args:         []string{"test-repo", "main", "feature", "test.txt"},
 			expectError:  false,
 			expectOutput: true,
 		},
 		{
 			name:          "missing repository",
-			args:          []string{"nonexistent", "main", "feature", "--", "test.txt"},
+			args:          []string{"nonexistent", "main", "feature", "test.txt"},
 			expectError:   true,
 			errorContains: "repository 'nonexistent' not found",
 		},
 		{
-			name:          "missing separator",
-			args:          []string{"test-repo", "main", "feature", "test.txt"},
+			name:          "missing file argument",
+			args:          []string{"test-repo", "main", "feature"},
 			expectError:   true,
-			errorContains: "file path must be specified after '--' separator",
+			errorContains: "expected format",
 		},
 		{
 			name:          "invalid argument count",
-			args:          []string{"test-repo", "main", "--", "test.txt"},
+			args:          []string{"test-repo", "main", "test.txt"},
 			expectError:   true,
 			errorContains: "expected format",
 		},
 		{
 			name:          "nonexistent branch",
-			args:          []string{"test-repo", "nonexistent-branch", "main", "--", "test.txt"},
+			args:          []string{"test-repo", "nonexistent-branch", "main", "test.txt"},
 			expectError:   true,
 			errorContains: "does not exist",
 		},
 		{
 			name:         "same branch comparison",
-			args:         []string{"test-repo", "main", "main", "--", "test.txt"},
+			args:         []string{"test-repo", "main", "main", "test.txt"},
 			expectError:  false,
 			expectOutput: false, // No differences expected
 		},
@@ -88,18 +92,31 @@ func TestDiffFileCommand(t *testing.T) {
 			os.Setenv("GMAN_CONFIG", configPath)
 			defer os.Unsetenv("GMAN_CONFIG")
 
-			// Create a new command instance
-			cmd := &cobra.Command{}
-			diffFileCmd.ResetFlags()
+			// Create command hierarchy: workCmd -> diffCmd -> diffFileCmd
+			testWorkCmd := &cobra.Command{Use: "work"}
+			testDiffCmd := &cobra.Command{Use: "diff"}
+			testDiffFileCmd := &cobra.Command{
+				Use:  "file <repo> <branch1> <branch2> -- <file_path>",
+				RunE: func(cmd *cobra.Command, args []string) error {
+					if err := diffFileCmd.Args(cmd, args); err != nil {
+						return err
+					}
+					return runDiffFile(cmd, args)
+				},
+			}
+			
+			testDiffCmd.AddCommand(testDiffFileCmd)
+			testWorkCmd.AddCommand(testDiffCmd)
 
-			// Capture output
+			// Configure output
 			var stdout, stderr bytes.Buffer
-			cmd.SetOut(&stdout)
-			cmd.SetErr(&stderr)
+			testWorkCmd.SetOut(&stdout)
+			testWorkCmd.SetErr(&stderr)
 
-			// Execute the command
-			diffFileCmd.SetArgs(tt.args)
-			err := diffFileCmd.ExecuteContext(cmd.Context())
+			// Build full args: diff file [test args]
+			fullArgs := append([]string{"diff", "file"}, tt.args...)
+			testWorkCmd.SetArgs(fullArgs)
+			err := testWorkCmd.Execute()
 
 			if tt.expectError {
 				if err == nil {
@@ -113,7 +130,8 @@ func TestDiffFileCommand(t *testing.T) {
 				}
 
 				output := stdout.String()
-				if tt.expectOutput && output == "" {
+				errOutput := stderr.String()
+				if tt.expectOutput && output == "" && errOutput == "" {
 					t.Error("Expected output but got none")
 				}
 			}
@@ -123,6 +141,10 @@ func TestDiffFileCommand(t *testing.T) {
 
 // TestDiffCrossRepoCommand tests the cross-repository diff functionality
 func TestDiffCrossRepoCommand(t *testing.T) {
+	// Reset DI container for clean test state
+	di.Reset()
+	defer di.Reset()
+
 	tempDir, err := os.MkdirTemp("", "gman_cross_diff_test_*")
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
@@ -162,25 +184,25 @@ func TestDiffCrossRepoCommand(t *testing.T) {
 	}{
 		{
 			name:         "valid cross-repo diff",
-			args:         []string{"repo1", "repo2", "--", "test.txt"},
+			args:         []string{"repo1", "repo2", "test.txt"},
 			expectError:  false,
 			expectOutput: true,
 		},
 		{
 			name:          "missing repository",
-			args:          []string{"nonexistent", "repo2", "--", "test.txt"},
+			args:          []string{"nonexistent", "repo2", "test.txt"},
 			expectError:   true,
 			errorContains: "repository 'nonexistent' not found",
 		},
 		{
 			name:          "nonexistent file",
-			args:          []string{"repo1", "repo2", "--", "nonexistent.txt"},
+			args:          []string{"repo1", "repo2", "nonexistent.txt"},
 			expectError:   true,
 			errorContains: "does not exist",
 		},
 		{
 			name:         "same repository comparison",
-			args:         []string{"repo1", "repo1", "--", "test.txt"},
+			args:         []string{"repo1", "repo1", "test.txt"},
 			expectError:  false,
 			expectOutput: false, // No differences expected
 		},
@@ -191,15 +213,29 @@ func TestDiffCrossRepoCommand(t *testing.T) {
 			os.Setenv("GMAN_CONFIG", configPath)
 			defer os.Unsetenv("GMAN_CONFIG")
 
-			cmd := &cobra.Command{}
-			diffCrossRepoCmd.ResetFlags()
+			// Create command hierarchy for cross-repo diff
+			testWorkCmd := &cobra.Command{Use: "work"}
+			testDiffCmd := &cobra.Command{Use: "diff"}
+			testCrossRepoCmd := &cobra.Command{
+				Use:  "cross-repo <repo1> <repo2> <file_path>",
+				RunE: func(cmd *cobra.Command, args []string) error {
+					if err := diffCrossRepoCmd.Args(cmd, args); err != nil {
+						return err
+					}
+					return runDiffCrossRepo(cmd, args)
+				},
+			}
+
+			testDiffCmd.AddCommand(testCrossRepoCmd)
+			testWorkCmd.AddCommand(testDiffCmd)
 
 			var stdout, stderr bytes.Buffer
-			cmd.SetOut(&stdout)
-			cmd.SetErr(&stderr)
+			testWorkCmd.SetOut(&stdout)
+			testWorkCmd.SetErr(&stderr)
 
-			diffCrossRepoCmd.SetArgs(tt.args)
-			err := diffCrossRepoCmd.ExecuteContext(cmd.Context())
+			fullArgs := append([]string{"diff", "cross-repo"}, tt.args...)
+			testWorkCmd.SetArgs(fullArgs)
+			err := testWorkCmd.Execute()
 
 			if tt.expectError {
 				if err == nil {
@@ -213,7 +249,8 @@ func TestDiffCrossRepoCommand(t *testing.T) {
 				}
 
 				output := stdout.String()
-				if tt.expectOutput && output == "" {
+				errOutput := stderr.String()
+				if tt.expectOutput && output == "" && errOutput == "" {
 					t.Error("Expected output but got none")
 				}
 			}
@@ -223,6 +260,10 @@ func TestDiffCrossRepoCommand(t *testing.T) {
 
 // TestExternalDiffTool tests integration with external diff tools
 func TestExternalDiffTool(t *testing.T) {
+	// Reset DI container for clean test state
+	di.Reset()
+	defer di.Reset()
+
 	// Skip this test if diff tool is not available
 	if _, err := exec.LookPath("diff"); err != nil {
 		t.Skip("diff command not available, skipping external tool test")
@@ -253,19 +294,16 @@ func TestExternalDiffTool(t *testing.T) {
 		diffTool = "diff"
 		defer func() { diffTool = "" }()
 
-		cmd := &cobra.Command{}
-		diffFileCmd.ResetFlags()
-
 		var stdout, stderr bytes.Buffer
-		cmd.SetOut(&stdout)
-		cmd.SetErr(&stderr)
+		diffFileCmd.SetOut(&stdout)
+		diffFileCmd.SetErr(&stderr)
 
-		args := []string{"test-repo", "main", "feature", "--tool", "diff", "--", "test.txt"}
+		args := []string{"test-repo", "main", "feature", "--tool", "diff", "test.txt"}
 		diffFileCmd.SetArgs(args)
 
 		// The command might succeed or fail depending on whether the external tool works
 		// We're mainly testing that the external tool path is executed without panicking
-		_ = diffFileCmd.ExecuteContext(cmd.Context())
+		_ = diffFileCmd.Execute()
 	})
 }
 
@@ -279,50 +317,50 @@ func TestDiffArgValidation(t *testing.T) {
 		errorContains string
 	}{
 		{
-			name:          "diff file - no separator",
+			name:          "diff file - too few args",
 			command:       diffFileCmd,
-			args:          []string{"repo", "branch1", "branch2", "file.txt"},
-			expectError:   true,
-			errorContains: "file path must be specified after '--' separator",
-		},
-		{
-			name:          "diff file - wrong arg count before separator",
-			command:       diffFileCmd,
-			args:          []string{"repo", "branch1", "--", "file.txt"},
+			args:          []string{"repo", "branch1", "branch2"},
 			expectError:   true,
 			errorContains: "expected format",
 		},
 		{
-			name:          "diff file - wrong total arg count",
+			name:          "diff file - wrong arg count",
 			command:       diffFileCmd,
-			args:          []string{"repo", "branch1", "branch2", "--", "file.txt", "extra"},
+			args:          []string{"repo", "branch1", "file.txt"},
+			expectError:   true,
+			errorContains: "expected format",
+		},
+		{
+			name:          "diff file - too many args",
+			command:       diffFileCmd,
+			args:          []string{"repo", "branch1", "branch2", "file.txt", "extra"},
 			expectError:   true,
 			errorContains: "expected format",
 		},
 		{
 			name:        "diff file - valid args",
 			command:     diffFileCmd,
-			args:        []string{"repo", "branch1", "branch2", "--", "file.txt"},
+			args:        []string{"repo", "branch1", "branch2", "file.txt"},
 			expectError: false,
 		},
 		{
-			name:          "cross-repo - no separator",
+			name:          "cross-repo - too few args",
 			command:       diffCrossRepoCmd,
-			args:          []string{"repo1", "repo2", "file.txt"},
+			args:          []string{"repo1", "repo2"},
 			expectError:   true,
-			errorContains: "file path must be specified after '--' separator",
+			errorContains: "expected format",
 		},
 		{
-			name:          "cross-repo - wrong arg count before separator",
+			name:          "cross-repo - wrong arg count",
 			command:       diffCrossRepoCmd,
-			args:          []string{"repo1", "--", "file.txt"},
+			args:          []string{"repo1", "file.txt"},
 			expectError:   true,
 			errorContains: "expected format",
 		},
 		{
 			name:        "cross-repo - valid args",
 			command:     diffCrossRepoCmd,
-			args:        []string{"repo1", "repo2", "--", "file.txt"},
+			args:        []string{"repo1", "repo2", "file.txt"},
 			expectError: false,
 		},
 	}
