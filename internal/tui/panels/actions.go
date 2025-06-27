@@ -8,6 +8,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"gman/internal/di"
+	"gman/internal/git"
 	"gman/internal/tui/models"
 	"gman/internal/tui/styles"
 	"gman/pkg/types"
@@ -475,10 +477,41 @@ func (a *ActionsPanel) handleRefresh(state *models.AppState) tea.Cmd {
 		models.ToastInfoCmd("Refreshing repository status..."),
 		models.ProgressCmd("refresh", "Updating repository status", 0, true),
 		func() tea.Msg {
-			// Simulate refresh work
-			time.Sleep(1 * time.Second)
+			// Get selected repository
+			repo := state.GetSelectedRepository()
+			if repo == nil {
+				return models.ActionCompleteMsg{
+					Result: "",
+					Error:  fmt.Errorf("no repository selected"),
+				}
+			}
+
+			// Get repository path from configuration
+			repoPath, exists := state.Repositories[repo.Alias]
+			if !exists {
+				return models.ActionCompleteMsg{
+					Result: "",
+					Error:  fmt.Errorf("repository path not found for %s", repo.Alias),
+				}
+			}
+
+			// Get git manager
+			gitMgr := getDIGitManager()
+			if gitMgr == nil {
+				return models.ActionCompleteMsg{
+					Result: "",
+					Error:  fmt.Errorf("git manager not available"),
+				}
+			}
+
+			// Get fresh repository status
+			status := gitMgr.GetRepoStatus(repo.Alias, repoPath)
+
+			// Update the state with new status
+			state.UpdateRepositoryData(repo.Alias, &status)
+
 			return models.ActionCompleteMsg{
-				Result: "Repository status refreshed",
+				Result: fmt.Sprintf("Refreshed status for %s", repo.Alias),
 				Error:  nil,
 			}
 		},
@@ -488,15 +521,46 @@ func (a *ActionsPanel) handleRefresh(state *models.AppState) tea.Cmd {
 func (a *ActionsPanel) handleSync(state *models.AppState) tea.Cmd {
 	return tea.Batch(
 		models.ToastInfoCmd("Syncing repository..."),
-		models.ProgressCmd("sync", "Pulling latest changes", 0, false),
+		models.ProgressCmd("sync", "Pulling latest changes", 0, true),
 		func() tea.Msg {
-			// Simulate progressive sync work
-			for i := 0; i <= 100; i += 25 {
-				time.Sleep(300 * time.Millisecond)
-				// In a real implementation, we'd send progress updates
+			// Get selected repository
+			repo := state.GetSelectedRepository()
+			if repo == nil {
+				return models.ActionCompleteMsg{
+					Result: "",
+					Error:  fmt.Errorf("no repository selected"),
+				}
 			}
+
+			// Get repository path from configuration
+			repoPath, exists := state.Repositories[repo.Alias]
+			if !exists {
+				return models.ActionCompleteMsg{
+					Result: "",
+					Error:  fmt.Errorf("repository path not found for %s", repo.Alias),
+				}
+			}
+
+			// Get git manager
+			gitMgr := getDIGitManager()
+			if gitMgr == nil {
+				return models.ActionCompleteMsg{
+					Result: "",
+					Error:  fmt.Errorf("git manager not available"),
+				}
+			}
+
+			// Execute sync operation (fetch + pull)
+			err := gitMgr.SyncRepository(repoPath, "ff-only") // Use fast-forward only mode
+			if err != nil {
+				return models.ActionCompleteMsg{
+					Result: "",
+					Error:  fmt.Errorf("failed to sync repository: %w", err),
+				}
+			}
+
 			return models.ActionCompleteMsg{
-				Result: "Repository synchronized",
+				Result: fmt.Sprintf("Successfully synchronized %s", repo.Alias),
 				Error:  nil,
 			}
 		},
@@ -504,23 +568,136 @@ func (a *ActionsPanel) handleSync(state *models.AppState) tea.Cmd {
 }
 
 func (a *ActionsPanel) handleCommit(state *models.AppState) tea.Cmd {
-	return func() tea.Msg {
-		// TODO: Implement commit dialog and execution
-		return models.ActionCompleteMsg{
-			Result: "Changes committed",
-			Error:  nil,
-		}
-	}
+	return tea.Batch(
+		models.ToastInfoCmd("Preparing commit..."),
+		models.ProgressCmd("commit", "Committing changes", 0, true),
+		func() tea.Msg {
+			// Get selected repository
+			repo := state.GetSelectedRepository()
+			if repo == nil {
+				return models.ActionCompleteMsg{
+					Result: "",
+					Error:  fmt.Errorf("no repository selected"),
+				}
+			}
+
+			// Get repository path from configuration
+			repoPath, exists := state.Repositories[repo.Alias]
+			if !exists {
+				return models.ActionCompleteMsg{
+					Result: "",
+					Error:  fmt.Errorf("repository path not found for %s", repo.Alias),
+				}
+			}
+
+			// Import DI to access git manager
+			gitMgr := getDIGitManager()
+			if gitMgr == nil {
+				return models.ActionCompleteMsg{
+					Result: "",
+					Error:  fmt.Errorf("git manager not available"),
+				}
+			}
+
+			// Check for uncommitted changes
+			hasChanges, err := gitMgr.HasUncommittedChanges(repoPath)
+			if err != nil {
+				return models.ActionCompleteMsg{
+					Result: "",
+					Error:  fmt.Errorf("failed to check for changes: %w", err),
+				}
+			}
+
+			if !hasChanges {
+				return models.ActionCompleteMsg{
+					Result: "No changes to commit",
+					Error:  nil,
+				}
+			}
+
+			// For now, use a default commit message. Later this can be enhanced with a dialog
+			commitMessage := "TUI commit: automated commit from dashboard"
+
+			// Stage all changes and commit
+			err = gitMgr.CommitChanges(repoPath, commitMessage, true) // true = add all changes
+			if err != nil {
+				return models.ActionCompleteMsg{
+					Result: "",
+					Error:  fmt.Errorf("failed to commit changes: %w", err),
+				}
+			}
+
+			return models.ActionCompleteMsg{
+				Result: fmt.Sprintf("Successfully committed changes in %s", repo.Alias),
+				Error:  nil,
+			}
+		},
+	)
 }
 
 func (a *ActionsPanel) handlePush(state *models.AppState) tea.Cmd {
-	return func() tea.Msg {
-		// TODO: Implement push operation
-		return models.ActionCompleteMsg{
-			Result: "Changes pushed to remote",
-			Error:  nil,
-		}
-	}
+	return tea.Batch(
+		models.ToastInfoCmd("Pushing changes..."),
+		models.ProgressCmd("push", "Pushing to remote", 0, true),
+		func() tea.Msg {
+			// Get selected repository
+			repo := state.GetSelectedRepository()
+			if repo == nil {
+				return models.ActionCompleteMsg{
+					Result: "",
+					Error:  fmt.Errorf("no repository selected"),
+				}
+			}
+
+			// Get repository path from configuration
+			repoPath, exists := state.Repositories[repo.Alias]
+			if !exists {
+				return models.ActionCompleteMsg{
+					Result: "",
+					Error:  fmt.Errorf("repository path not found for %s", repo.Alias),
+				}
+			}
+
+			// Get git manager
+			gitMgr := getDIGitManager()
+			if gitMgr == nil {
+				return models.ActionCompleteMsg{
+					Result: "",
+					Error:  fmt.Errorf("git manager not available"),
+				}
+			}
+
+			// Check for unpushed commits
+			hasUnpushed, err := gitMgr.HasUnpushedCommits(repoPath)
+			if err != nil {
+				return models.ActionCompleteMsg{
+					Result: "",
+					Error:  fmt.Errorf("failed to check for unpushed commits: %w", err),
+				}
+			}
+
+			if !hasUnpushed {
+				return models.ActionCompleteMsg{
+					Result: "No commits to push",
+					Error:  nil,
+				}
+			}
+
+			// Execute push operation
+			err = gitMgr.PushChanges(repoPath, false, false) // force=false, setUpstream=false
+			if err != nil {
+				return models.ActionCompleteMsg{
+					Result: "",
+					Error:  fmt.Errorf("failed to push changes: %w", err),
+				}
+			}
+
+			return models.ActionCompleteMsg{
+				Result: fmt.Sprintf("Successfully pushed changes from %s", repo.Alias),
+				Error:  nil,
+			}
+		},
+	)
 }
 
 func (a *ActionsPanel) handleStash(state *models.AppState) tea.Cmd {
@@ -621,4 +798,10 @@ func (a *ActionsPanel) handleOpenFileManager(state *models.AppState) tea.Cmd {
 			Error:  nil,
 		}
 	}
+}
+
+// getDIGitManager safely gets the git manager from DI container
+func getDIGitManager() *git.Manager {
+	// This is safe to call from any context
+	return di.GitManager()
 }
