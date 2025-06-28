@@ -2,6 +2,7 @@ package batch
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 
 	"gman/internal/config"
@@ -151,6 +152,11 @@ func RunBatchOperation(operation BatchOperation, configMgr *config.Manager) erro
 	if progressBar != nil {
 		progressBar.Finish()
 	}
+
+	// Sort results by alias for consistent output order
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Alias < results[j].Alias
+	})
 
 	// Display detailed results if not using progress mode
 	if !BatchProgress {

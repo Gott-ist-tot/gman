@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -52,6 +53,37 @@ func init() {
 }
 
 func runSwitch(cmd *cobra.Command, args []string) error {
+	// Check if shell integration is properly configured
+	if !isShellIntegrationActive() {
+		fmt.Println("⚠️  Shell integration not detected!")
+		fmt.Println("")
+		fmt.Println("The 'gman switch' command requires shell integration to change directories.")
+		fmt.Println("To fix this, add the following to your ~/.zshrc or ~/.bashrc:")
+		fmt.Println("")
+		fmt.Println("  # gman shell integration")
+		fmt.Println("  gman() {")
+		fmt.Println("    local output")
+		fmt.Println("    output=$(command gman \"$@\" 2>&1)")
+		fmt.Println("    if [[ \"$output\" == GMAN_CD:* ]]; then")
+		fmt.Println("      local target_dir=\"${output#GMAN_CD:}\"")
+		fmt.Println("      if [ -d \"$target_dir\" ]; then")
+		fmt.Println("        cd \"$target_dir\"")
+		fmt.Println("        echo \"Switched to: $target_dir\"")
+		fmt.Println("      else")
+		fmt.Println("        echo \"Error: Directory not found: $target_dir\" >&2")
+		fmt.Println("        return 1")
+		fmt.Println("      fi")
+		fmt.Println("    else")
+		fmt.Println("      echo \"$output\"")
+		fmt.Println("    fi")
+		fmt.Println("  }")
+		fmt.Println("")
+		fmt.Println("Then reload your shell: source ~/.zshrc")
+		fmt.Println("")
+		fmt.Println("For more help, see: gman tools setup")
+		return fmt.Errorf("shell integration required")
+	}
+	
 	// Load configuration
 	configMgr := di.ConfigManager()
 	if err := configMgr.Load(); err != nil {
@@ -228,5 +260,45 @@ func isAliasUsed(alias string, targets []types.SwitchTarget) bool {
 			return true
 		}
 	}
+	return false
+}
+
+// isShellIntegrationActive detects if gman is running within the shell wrapper function
+func isShellIntegrationActive() bool {
+	// Method 1: Check for GMAN_SHELL_INTEGRATION environment variable
+	// The shell wrapper should set this to indicate it's active
+	if os.Getenv("GMAN_SHELL_INTEGRATION") == "1" {
+		return true
+	}
+	
+	// Method 2: Check if we're being called by the gman shell function
+	// Look for indicators that suggest we're in a shell wrapper
+	// Note: This is a heuristic and not foolproof - we primarily rely on method 1
+	if parent := os.Getenv("_"); parent != "" && strings.Contains(parent, "gman") {
+		// Only trust this if we also have other shell integration indicators
+		// This prevents false positives when gman is called directly
+		if os.Getenv("GMAN_WRAPPER_ACTIVE") == "1" {
+			return true
+		}
+	}
+	
+	// Method 3: Check the process hierarchy (simplified check)
+	// If SHLVL exists and is reasonable, we might be in a shell environment
+	if shlvl := os.Getenv("SHLVL"); shlvl != "" {
+		// Shell level exists, check if we're in an interactive environment
+		if os.Getenv("PS1") != "" || os.Getenv("ZSH_NAME") != "" || os.Getenv("BASH") != "" {
+			// We're in an interactive shell - the user should set up the wrapper
+			// For now, assume it's NOT set up since this is the main issue
+			return false
+		}
+	}
+	
+	// Method 4: Check for explicit bypass flag for advanced users
+	if os.Getenv("GMAN_SKIP_SHELL_CHECK") == "1" {
+		return true
+	}
+	
+	// Default: assume shell integration is not active
+	// This will prompt users to set up the wrapper function
 	return false
 }

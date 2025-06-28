@@ -37,7 +37,8 @@ type AppState struct {
 
 	// Background tasks
 	LastStatusUpdate time.Time
-	RefreshTicker    *time.Ticker
+	// Note: Refresh timing is handled by Bubble Tea's command system (StatusTickCmd)
+	// No need for manual ticker management
 
 	// Error handling
 	LastError     error

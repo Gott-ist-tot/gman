@@ -313,7 +313,8 @@ func (r *RepositoryPanel) loadSingleRepositoryStatus(alias, path string) tea.Cmd
 func (r *RepositoryPanel) loadSingleRepositoryStatusWithFetch(alias, path string) tea.Cmd {
 	return func() tea.Msg {
 		// Use full loading with fetch for accurate sync status
-		status := r.gitMgr.GetRepoStatus(alias, path)
+		statusReader := di.StatusReader()
+		status := statusReader.GetRepoStatus(alias, path)
 		return models.RepositoryStatusRefreshMsg{
 			Alias:  alias,
 			Status: &status,
@@ -417,10 +418,25 @@ func (r *RepositoryPanel) sortRepositories() {
 		case models.SortByStatus:
 			return r.getStatusPriority(r.repos[i]) < r.getStatusPriority(r.repos[j])
 		case models.SortByModified:
-			if r.repos[i].Status != nil && r.repos[j].Status != nil {
-				return r.repos[i].Status.CommitTime.After(r.repos[j].Status.CommitTime)
+			// Safely handle nil status to prevent panic
+			statusI := r.repos[i].Status
+			statusJ := r.repos[j].Status
+			
+			// If both have status, compare by commit time
+			if statusI != nil && statusJ != nil {
+				return statusI.CommitTime.After(statusJ.CommitTime)
 			}
-			return false
+			
+			// If only one has status, prioritize the one with status
+			if statusI != nil && statusJ == nil {
+				return true
+			}
+			if statusI == nil && statusJ != nil {
+				return false
+			}
+			
+			// If both are nil, fall back to name sorting
+			return r.repos[i].Alias < r.repos[j].Alias
 		default:
 			return r.repos[i].Alias < r.repos[j].Alias
 		}

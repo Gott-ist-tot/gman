@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 
+	"gman/internal/config"
 	"gman/internal/di"
 	"gman/internal/git"
 	"gman/internal/progress"
@@ -65,45 +67,16 @@ func init() {
 }
 
 func runSync(cmd *cobra.Command, args []string) error {
-	// Load configuration
-	configMgr := di.ConfigManager()
-	if err := configMgr.Load(); err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
-	}
-
-	cfg := configMgr.GetConfig()
-	if len(cfg.Repositories) == 0 {
-		fmt.Println("No repositories configured. Use 'gman add' to add repositories.")
-		return nil
-	}
-
-	// Get repositories to sync (either all or group-specific)
-	var reposToSync map[string]string
-	var err error
-
-	if groupName != "" {
-		reposToSync, err = configMgr.GetGroupRepositories(groupName)
-		if err != nil {
-			return fmt.Errorf("failed to get group repositories: %w", err)
-		}
-		if len(reposToSync) == 0 {
-			fmt.Printf("Group '%s' has no repositories.\n", groupName)
-			return nil
-		}
-	} else {
-		reposToSync = cfg.Repositories
-	}
-
-	// Determine sync mode
-	mode := determineSyncMode(cfg)
-
-	// Get Git manager for status checking
-	gitMgr := di.GitManager()
-
-	// Filter repositories based on conditions
-	filteredRepos, err := filterRepositories(reposToSync, gitMgr)
+	// Load and validate configuration
+	configMgr, cfg, err := validateAndLoadConfig()
 	if err != nil {
-		return fmt.Errorf("failed to filter repositories: %w", err)
+		return err
+	}
+
+	// Determine which repositories to sync
+	filteredRepos, mode, err := determineRepositoriesToSync(configMgr, cfg)
+	if err != nil {
+		return err
 	}
 
 	if len(filteredRepos) == 0 {
@@ -111,121 +84,19 @@ func runSync(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Display what will be synced
+	// Handle dry-run mode
 	if dryRun {
-		groupInfo := ""
-		if groupName != "" {
-			groupInfo = fmt.Sprintf(" from group '%s'", groupName)
-		}
-		fmt.Printf("DRY RUN: Would synchronize %d repositories%s (mode: %s):\n\n", len(filteredRepos), groupInfo, mode)
-		for alias, path := range filteredRepos {
-			fmt.Printf("  %s → %s\n", alias, path)
-		}
-		return nil
+		return displayDryRunPreview(filteredRepos, mode)
 	}
 
-	// Setup progress tracking
-	var progressBar *progress.MultiBar
-	if showProgress {
-		progressBar = progress.NewMultiBar()
-		for alias := range filteredRepos {
-			progressBar.AddOperation(alias)
-		}
-	} else {
-		groupInfo := ""
-		if groupName != "" {
-			groupInfo = fmt.Sprintf(" from group '%s'", groupName)
-		}
-		fmt.Printf("Synchronizing %d repositories%s (mode: %s)...\n\n", len(filteredRepos), groupInfo, mode)
+	// Execute the actual sync operations
+	results, err := executeSyncOperations(filteredRepos, mode, cfg)
+	if err != nil {
+		return err
 	}
 
-	// Use a channel to collect results
-	resultChan := make(chan syncResult, len(filteredRepos))
-	var wg sync.WaitGroup
-
-	maxConcurrency := cfg.Settings.ParallelJobs
-	if maxConcurrency <= 0 {
-		maxConcurrency = 5
-	}
-
-	semaphore := make(chan struct{}, maxConcurrency)
-
-	for alias, path := range filteredRepos {
-		wg.Add(1)
-		go func(alias, path string) {
-			defer wg.Done()
-			semaphore <- struct{}{}        // Acquire semaphore
-			defer func() { <-semaphore }() // Release semaphore
-
-			if progressBar != nil {
-				progressBar.StartOperation(alias)
-			}
-
-			err := gitMgr.SyncRepository(path, mode)
-
-			if progressBar != nil {
-				progressBar.CompleteOperation(alias, err)
-			}
-
-			resultChan <- syncResult{
-				alias: alias,
-				path:  path,
-				error: err,
-			}
-		}(alias, path)
-	}
-
-	// Wait for all goroutines to complete
-	go func() {
-		wg.Wait()
-		close(resultChan)
-	}()
-
-	// Collect results
-	var successCount, errorCount int
-	var results []syncResult
-	for result := range resultChan {
-		results = append(results, result)
-		if result.error != nil {
-			errorCount++
-		} else {
-			successCount++
-		}
-	}
-
-	// Finish progress display
-	if progressBar != nil {
-		progressBar.Finish()
-	}
-
-	// Display detailed results if not using progress mode
-	if !showProgress {
-		for _, result := range results {
-			if result.error != nil {
-				fmt.Printf("❌ %s: %v\n", result.alias, result.error)
-			} else {
-				fmt.Printf("✅ %s: synced successfully\n", result.alias)
-			}
-		}
-	}
-
-	// Summary
-	fmt.Printf("\nSync completed: %d successful, %d failed\n", successCount, errorCount)
-
-	// Show failed repositories if any
-	if errorCount > 0 && showProgress {
-		fmt.Println("\nFailed repositories:")
-		for _, result := range results {
-			if result.error != nil {
-				fmt.Printf("  ❌ %s: %v\n", result.alias, result.error)
-			}
-		}
-		return fmt.Errorf("sync failed for %d repositories", errorCount)
-	} else if errorCount > 0 {
-		return fmt.Errorf("sync failed for %d repositories", errorCount)
-	}
-
-	return nil
+	// Display results and summary
+	return displaySyncResults(results)
 }
 
 func determineSyncMode(cfg *types.Config) string {
@@ -256,7 +127,7 @@ type syncResult struct {
 }
 
 // filterRepositories filters repositories based on conditional sync options
-func filterRepositories(repos map[string]string, gitMgr *git.Manager) (map[string]string, error) {
+func filterRepositories(repos map[string]string, statusReader git.StatusReader) (map[string]string, error) {
 	// If no filter options are specified, return all repositories
 	if !onlyDirty && !onlyBehind && !onlyAhead {
 		return repos, nil
@@ -266,7 +137,7 @@ func filterRepositories(repos map[string]string, gitMgr *git.Manager) (map[strin
 
 	for alias, path := range repos {
 		// Get repository status
-		status := gitMgr.GetRepoStatus(alias, path)
+		status := statusReader.GetRepoStatus(alias, path)
 		if status.Error != nil {
 			// Skip repositories with errors, but log them
 			fmt.Printf("Warning: Skipping %s due to error: %v\n", alias, status.Error)
@@ -294,4 +165,189 @@ func filterRepositories(repos map[string]string, gitMgr *git.Manager) (map[strin
 	}
 
 	return filtered, nil
+}
+
+// validateAndLoadConfig loads and validates the configuration
+func validateAndLoadConfig() (*config.Manager, *types.Config, error) {
+	configMgr := di.ConfigManager()
+	if err := configMgr.Load(); err != nil {
+		return nil, nil, fmt.Errorf("failed to load configuration: %w", err)
+	}
+
+	cfg := configMgr.GetConfig()
+	if len(cfg.Repositories) == 0 {
+		fmt.Println("No repositories configured. Use 'gman add' to add repositories.")
+		return configMgr, cfg, nil
+	}
+
+	return configMgr, cfg, nil
+}
+
+// determineRepositoriesToSync determines which repositories to sync and the sync mode
+func determineRepositoriesToSync(configMgr *config.Manager, cfg *types.Config) (map[string]string, string, error) {
+	// Get repositories to sync (either all or group-specific)
+	var reposToSync map[string]string
+	var err error
+
+	if groupName != "" {
+		reposToSync, err = configMgr.GetGroupRepositories(groupName)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to get group repositories: %w", err)
+		}
+		if len(reposToSync) == 0 {
+			fmt.Printf("Group '%s' has no repositories.\n", groupName)
+			return nil, "", nil
+		}
+	} else {
+		reposToSync = cfg.Repositories
+	}
+
+	// Determine sync mode
+	mode := determineSyncMode(cfg)
+
+	// Get status reader for repository filtering
+	statusReader := di.StatusReader()
+
+	// Filter repositories based on conditions
+	filteredRepos, err := filterRepositories(reposToSync, statusReader)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to filter repositories: %w", err)
+	}
+
+	return filteredRepos, mode, nil
+}
+
+// displayDryRunPreview shows what would be synced in dry-run mode
+func displayDryRunPreview(filteredRepos map[string]string, mode string) error {
+	groupInfo := ""
+	if groupName != "" {
+		groupInfo = fmt.Sprintf(" from group '%s'", groupName)
+	}
+	fmt.Printf("DRY RUN: Would synchronize %d repositories%s (mode: %s):\n\n", len(filteredRepos), groupInfo, mode)
+	for alias, path := range filteredRepos {
+		fmt.Printf("  %s → %s\n", alias, path)
+	}
+	return nil
+}
+
+// executeSyncOperations performs the actual sync operations across repositories
+func executeSyncOperations(filteredRepos map[string]string, mode string, cfg *types.Config) ([]syncResult, error) {
+	// Setup progress tracking
+	var progressBar *progress.MultiBar
+	if showProgress {
+		progressBar = progress.NewMultiBar()
+		for alias := range filteredRepos {
+			progressBar.AddOperation(alias)
+		}
+	} else {
+		groupInfo := ""
+		if groupName != "" {
+			groupInfo = fmt.Sprintf(" from group '%s'", groupName)
+		}
+		fmt.Printf("Synchronizing %d repositories%s (mode: %s)...\n\n", len(filteredRepos), groupInfo, mode)
+	}
+
+	// Use a channel to collect results
+	resultChan := make(chan syncResult, len(filteredRepos))
+	var wg sync.WaitGroup
+
+	maxConcurrency := cfg.Settings.ParallelJobs
+	if maxConcurrency <= 0 {
+		maxConcurrency = 5
+	}
+
+	semaphore := make(chan struct{}, maxConcurrency)
+	syncMgr := di.SyncManager()
+
+	for alias, path := range filteredRepos {
+		wg.Add(1)
+		go func(alias, path string) {
+			defer wg.Done()
+			semaphore <- struct{}{}        // Acquire semaphore
+			defer func() { <-semaphore }() // Release semaphore
+
+			if progressBar != nil {
+				progressBar.StartOperation(alias)
+			}
+
+			err := syncMgr.SyncRepository(path, mode)
+
+			if progressBar != nil {
+				progressBar.CompleteOperation(alias, err)
+			}
+
+			resultChan <- syncResult{
+				alias: alias,
+				path:  path,
+				error: err,
+			}
+		}(alias, path)
+	}
+
+	// Wait for all goroutines to complete
+	go func() {
+		wg.Wait()
+		close(resultChan)
+	}()
+
+	// Collect results
+	var results []syncResult
+	for result := range resultChan {
+		results = append(results, result)
+	}
+
+	// Finish progress display
+	if progressBar != nil {
+		progressBar.Finish()
+	}
+
+	// Sort results by alias for consistent output order
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].alias < results[j].alias
+	})
+
+	return results, nil
+}
+
+// displaySyncResults displays the results and returns appropriate error if needed
+func displaySyncResults(results []syncResult) error {
+	var successCount, errorCount int
+	
+	// Count results
+	for _, result := range results {
+		if result.error != nil {
+			errorCount++
+		} else {
+			successCount++
+		}
+	}
+
+	// Display detailed results if not using progress mode
+	if !showProgress {
+		for _, result := range results {
+			if result.error != nil {
+				fmt.Printf("❌ %s: %v\n", result.alias, result.error)
+			} else {
+				fmt.Printf("✅ %s: synced successfully\n", result.alias)
+			}
+		}
+	}
+
+	// Summary
+	fmt.Printf("\nSync completed: %d successful, %d failed\n", successCount, errorCount)
+
+	// Show failed repositories if any
+	if errorCount > 0 && showProgress {
+		fmt.Println("\nFailed repositories:")
+		for _, result := range results {
+			if result.error != nil {
+				fmt.Printf("  ❌ %s: %v\n", result.alias, result.error)
+			}
+		}
+		return fmt.Errorf("sync failed for %d repositories", errorCount)
+	} else if errorCount > 0 {
+		return fmt.Errorf("sync failed for %d repositories", errorCount)
+	}
+
+	return nil
 }

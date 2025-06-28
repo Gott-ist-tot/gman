@@ -530,6 +530,159 @@ func TestSwitchErrorHandling(t *testing.T) {
 	}
 }
 
+// TestShellIntegrationDetection tests the shell integration detection functionality
+func TestShellIntegrationDetection(t *testing.T) {
+	tests := []struct {
+		name        string
+		envVars     map[string]string
+		expected    bool
+		description string
+	}{
+		{
+			name:        "shell integration active via GMAN_SHELL_INTEGRATION",
+			envVars:     map[string]string{"GMAN_SHELL_INTEGRATION": "1"},
+			expected:    true,
+			description: "Should detect when GMAN_SHELL_INTEGRATION=1",
+		},
+		{
+			name:        "shell integration bypassed via GMAN_SKIP_SHELL_CHECK",
+			envVars:     map[string]string{"GMAN_SKIP_SHELL_CHECK": "1"},
+			expected:    true,
+			description: "Should bypass check when GMAN_SKIP_SHELL_CHECK=1",
+		},
+		{
+			name:        "no shell integration detected",
+			envVars:     map[string]string{},
+			expected:    false,
+			description: "Should return false when no integration detected",
+		},
+		{
+			name: "interactive shell without wrapper",
+			envVars: map[string]string{
+				"PS1":    "$ ",
+				"SHLVL":  "1",
+				"_":      "/usr/bin/gman",
+			},
+			expected:    false,
+			description: "Should return false for interactive shell without wrapper",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Clear existing environment variables
+			os.Unsetenv("GMAN_SHELL_INTEGRATION")
+			os.Unsetenv("GMAN_SKIP_SHELL_CHECK")
+			os.Unsetenv("PS1")
+			os.Unsetenv("SHLVL")
+			os.Unsetenv("_")
+
+			// Set test environment variables
+			for key, value := range tt.envVars {
+				os.Setenv(key, value)
+			}
+
+			// Clean up after test
+			defer func() {
+				for key := range tt.envVars {
+					os.Unsetenv(key)
+				}
+			}()
+
+			result := isShellIntegrationActive()
+			if result != tt.expected {
+				t.Errorf("isShellIntegrationActive() = %v, expected %v (%s)", result, tt.expected, tt.description)
+			}
+		})
+	}
+}
+
+// TestSwitchShellIntegrationWarning tests that the shell integration warning is shown
+func TestSwitchShellIntegrationWarning(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "gman_switch_shell_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Initialize test repository
+	repoPath := filepath.Join(tempDir, "test-repo")
+	if err := test.InitBasicTestRepository(t, repoPath); err != nil {
+		t.Fatalf("Failed to initialize test repository: %v", err)
+	}
+
+	// Create basic config
+	configPath := filepath.Join(tempDir, "config.yml")
+	if err := test.CreateBasicTestConfig(t, configPath, map[string]string{"test-repo": repoPath}); err != nil {
+		t.Fatalf("Failed to create test config: %v", err)
+	}
+
+	t.Run("shell integration warning shown when not detected", func(t *testing.T) {
+		// Clear shell integration environment variables
+		os.Unsetenv("GMAN_SHELL_INTEGRATION")
+		os.Unsetenv("GMAN_SKIP_SHELL_CHECK")
+		defer func() {
+			os.Unsetenv("GMAN_SHELL_INTEGRATION")
+			os.Unsetenv("GMAN_SKIP_SHELL_CHECK")
+		}()
+
+		os.Setenv("GMAN_CONFIG", configPath)
+		defer os.Unsetenv("GMAN_CONFIG")
+
+		var stdout, stderr bytes.Buffer
+		switchCmd.SetOut(&stdout)
+		switchCmd.SetErr(&stderr)
+
+		switchCmd.SetArgs([]string{"test-repo"})
+		err := switchCmd.Execute()
+
+		// Should get an error about shell integration
+		if err == nil {
+			t.Error("Expected error about shell integration but got none")
+		}
+
+		if !strings.Contains(err.Error(), "shell integration required") {
+			t.Errorf("Expected shell integration error, got: %v", err)
+		}
+
+		// Check that warning message is displayed
+		output := stdout.String()
+		if !strings.Contains(output, "Shell integration not detected") {
+			t.Error("Expected shell integration warning in output")
+		}
+		if !strings.Contains(output, "gman() {") {
+			t.Error("Expected shell function example in output")
+		}
+	})
+
+	t.Run("no warning when shell integration is active", func(t *testing.T) {
+		// Set shell integration environment variable
+		os.Setenv("GMAN_SHELL_INTEGRATION", "1")
+		defer os.Unsetenv("GMAN_SHELL_INTEGRATION")
+
+		os.Setenv("GMAN_CONFIG", configPath)
+		defer os.Unsetenv("GMAN_CONFIG")
+
+		var stdout, stderr bytes.Buffer
+		switchCmd.SetOut(&stdout)
+		switchCmd.SetErr(&stderr)
+
+		switchCmd.SetArgs([]string{"test-repo"})
+		err := switchCmd.Execute()
+
+		// Should not get shell integration error
+		if err != nil {
+			t.Errorf("Unexpected error when shell integration is active: %v", err)
+		}
+
+		// Should get GMAN_CD output
+		output := stdout.String()
+		if !strings.Contains(output, "GMAN_CD:") {
+			t.Error("Expected GMAN_CD output when shell integration is active")
+		}
+	})
+}
+
 // Helper functions for switch command testing
 
 // initSwitchTestRepository creates a test repository suitable for switch operations
