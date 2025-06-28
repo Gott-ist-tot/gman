@@ -34,17 +34,10 @@ func init() {
 }
 
 func runStatus(cmd *cobra.Command, args []string) error {
-	// Load configuration
+	// Configuration is already loaded by PersistentPreRunE
+	// Repository check is already done by work group's PersistentPreRunE
 	configMgr := di.ConfigManager()
-	if err := configMgr.Load(); err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
-	}
-
 	cfg := configMgr.GetConfig()
-	if len(cfg.Repositories) == 0 {
-		fmt.Println("No repositories configured. Use 'gman add' to add repositories.")
-		return nil
-	}
 
 	// Get status for all repositories
 	gitMgr := di.GitManager()

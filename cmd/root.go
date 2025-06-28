@@ -1,10 +1,13 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"gman/internal/di"
 )
 
 var cfgFile string
@@ -20,7 +23,7 @@ var rootCmd = &cobra.Command{
   gman tools setup                    # Interactive setup wizard for new users
   gman work status                    # Monitor status across all repositories
   gman switch                         # Smart repository navigation with recent history
-  gman tools dashboard                # Launch interactive TUI dashboard
+  gman tools find file config.yaml   # Lightning-fast file search across repositories
 
 📁 COMMAND GROUPS (with shortcuts):
   gman repo    (r)                    # Repository management (add, remove, list, groups)
@@ -51,6 +54,15 @@ var rootCmd = &cobra.Command{
 leaving precise write operations to you and native Git commands for maximum safety.
 
 💡 TIP: Use 'gman <group> --help' to see all commands in each group.`,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// Load configuration for all commands that need it
+		// This is done globally to avoid duplication across commands
+		configMgr := di.ConfigManager()
+		if err := configMgr.Load(); err != nil {
+			return fmt.Errorf("failed to load configuration: %w", err)
+		}
+		return nil
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

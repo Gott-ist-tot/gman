@@ -39,6 +39,16 @@ repositories:
 	// Reset DI container for testing
 	di.Reset()
 
+	// Skip repository check for testing
+	os.Setenv("GMAN_SKIP_REPO_CHECK", "true")
+	defer os.Unsetenv("GMAN_SKIP_REPO_CHECK")
+
+	// Manually load the configuration for testing
+	configMgr := di.ConfigManager()
+	if err := configMgr.Load(); err != nil {
+		t.Fatalf("Failed to load test config: %v", err)
+	}
+
 	tests := []struct {
 		name     string
 		args     []string
@@ -109,6 +119,10 @@ func TestListCommandWithNoConfig(t *testing.T) {
 
 	// Reset DI container for testing
 	di.Reset()
+
+	// Skip repository check for testing
+	os.Setenv("GMAN_SKIP_REPO_CHECK", "true")
+	defer os.Unsetenv("GMAN_SKIP_REPO_CHECK")
 
 	// This should handle missing config gracefully
 	err := runList(listCmd, []string{})

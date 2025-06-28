@@ -267,7 +267,7 @@ func TestSwitchTargetCollection(t *testing.T) {
 	}
 
 	configPath := filepath.Join(tempDir, "config.yml")
-	if err := createTestConfig(t, configPath, repos); err != nil {
+	if err := test.CreateBasicTestConfig(t, configPath, repos); err != nil {
 		t.Fatalf("Failed to create test config: %v", err)
 	}
 
@@ -326,7 +326,7 @@ func TestSwitchFuzzyMatching(t *testing.T) {
 	}
 
 	configPath := filepath.Join(tempDir, "config.yml")
-	if err := createTestConfig(t, configPath, repos); err != nil {
+	if err := test.CreateBasicTestConfig(t, configPath, repos); err != nil {
 		t.Fatalf("Failed to create test config: %v", err)
 	}
 
@@ -433,7 +433,7 @@ func TestSwitchPerformance(t *testing.T) {
 	}
 
 	configPath := filepath.Join(tempDir, "config.yml")
-	if err := createTestConfig(t, configPath, repos); err != nil {
+	if err := test.CreateBasicTestConfig(t, configPath, repos); err != nil {
 		t.Fatalf("Failed to create test config: %v", err)
 	}
 
@@ -503,7 +503,7 @@ func TestSwitchErrorHandling(t *testing.T) {
 			configPath := filepath.Join(tempDir, fmt.Sprintf("config-%s.yml", tt.name))
 
 			if tt.setupConfig {
-				if err := createTestConfig(t, configPath, tt.configContent); err != nil {
+				if err := test.CreateBasicTestConfig(t, configPath, tt.configContent); err != nil {
 					t.Fatalf("Failed to create test config: %v", err)
 				}
 				os.Setenv("GMAN_CONFIG", configPath)

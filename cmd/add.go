@@ -65,12 +65,8 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Load configuration
+	// Configuration is already loaded by root command's PersistentPreRunE
 	configMgr := di.ConfigManager()
-	if err := configMgr.Load(); err != nil {
-		return errors.Wrap(err, errors.ErrTypeConfigInvalid, "failed to load configuration").
-			WithSuggestion("Run 'gman setup' to create or repair configuration")
-	}
 
 	// Check if alias already exists
 	cfg := configMgr.GetConfig()

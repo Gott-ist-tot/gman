@@ -97,10 +97,8 @@ func runGroupCreate(cmd *cobra.Command, args []string) error {
 	repositories := args[1:]
 
 	// Load configuration
+	// Configuration is already loaded by root command's PersistentPreRunE
 	configMgr := di.ConfigManager()
-	if err := configMgr.Load(); err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
-	}
 
 	// Create group
 	if err := configMgr.CreateGroup(groupName, groupDescription, repositories); err != nil {
@@ -121,10 +119,8 @@ func runGroupCreate(cmd *cobra.Command, args []string) error {
 
 func runGroupList(cmd *cobra.Command, args []string) error {
 	// Load configuration
+	// Configuration is already loaded by root command's PersistentPreRunE
 	configMgr := di.ConfigManager()
-	if err := configMgr.Load(); err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
-	}
 
 	groups := configMgr.GetGroups()
 	if len(groups) == 0 {
@@ -166,10 +162,8 @@ func runGroupDelete(cmd *cobra.Command, args []string) error {
 	groupName := args[0]
 
 	// Load configuration
+	// Configuration is already loaded by root command's PersistentPreRunE
 	configMgr := di.ConfigManager()
-	if err := configMgr.Load(); err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
-	}
 
 	// Delete group
 	if err := configMgr.DeleteGroup(groupName); err != nil {
@@ -185,10 +179,8 @@ func runGroupAdd(cmd *cobra.Command, args []string) error {
 	repositories := args[1:]
 
 	// Load configuration
+	// Configuration is already loaded by root command's PersistentPreRunE
 	configMgr := di.ConfigManager()
-	if err := configMgr.Load(); err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
-	}
 
 	// Add to group
 	if err := configMgr.AddToGroup(groupName, repositories); err != nil {
@@ -206,10 +198,8 @@ func runGroupRemove(cmd *cobra.Command, args []string) error {
 	repositories := args[1:]
 
 	// Load configuration
+	// Configuration is already loaded by root command's PersistentPreRunE
 	configMgr := di.ConfigManager()
-	if err := configMgr.Load(); err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
-	}
 
 	// Remove from group
 	if err := configMgr.RemoveFromGroup(groupName, repositories); err != nil {

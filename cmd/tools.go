@@ -1,7 +1,12 @@
 package cmd
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/spf13/cobra"
+
+	"gman/internal/di"
 )
 
 // toolsCmd represents the tools and utilities command group
@@ -12,7 +17,6 @@ var toolsCmd = &cobra.Command{
 
 This command group includes:
 - real-time search capabilities
-- interactive dashboard
 - task-oriented file management
 - setup and configuration tools
 - shell integration utilities
@@ -24,9 +28,37 @@ Examples:
   gman tools find content "TODO"            # Search file content across repositories
   gman tools task create feature-auth       # Create task collection
   gman tools task list-files auth | xargs aider  # External tool integration
-  gman tools dashboard                       # Launch interactive TUI
   gman tools health                          # System diagnostics and health check`,
 	Aliases: []string{"t"},
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// Call parent's PersistentPreRunE first to ensure config is loaded
+		if cmd.Parent() != nil && cmd.Parent().PersistentPreRunE != nil {
+			if err := cmd.Parent().PersistentPreRunE(cmd, args); err != nil {
+				return err
+			}
+		}
+
+		// Skip repository check during testing or if explicitly disabled
+		if os.Getenv("GMAN_SKIP_REPO_CHECK") == "true" {
+			return nil
+		}
+
+		// Only check repositories for commands that need them
+		// Commands like 'setup', 'health', 'init' don't require existing repositories
+		commandsNeedingRepos := map[string]bool{
+			"find": true,
+			"task": true,
+		}
+
+		if commandsNeedingRepos[cmd.Name()] {
+			configMgr := di.ConfigManager()
+			cfg := configMgr.GetConfig()
+			if len(cfg.Repositories) == 0 {
+				return fmt.Errorf("no repositories configured. Use 'gman repo add <alias> <path>' to add repositories")
+			}
+		}
+		return nil
+	},
 }
 
 
@@ -35,7 +67,6 @@ func init() {
 
 	// Add original commands directly to tools group to preserve subcommands
 	toolsCmd.AddCommand(findCmd)
-	toolsCmd.AddCommand(dashboardCmd)
 	toolsCmd.AddCommand(setupCmd)
 	toolsCmd.AddCommand(completionCmd)
 	toolsCmd.AddCommand(initCmd)

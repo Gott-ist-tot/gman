@@ -117,16 +117,9 @@ func init() {
 }
 
 func runFindFile(cmd *cobra.Command, args []string) error {
-	// Load configuration
+	// Configuration is already loaded and repositories checked by tools group's PersistentPreRunE
 	configMgr := di.ConfigManager()
-	if err := configMgr.Load(); err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
-	}
-
 	cfg := configMgr.GetConfig()
-	if len(cfg.Repositories) == 0 {
-		return fmt.Errorf("no repositories configured. Use 'gman repo add' to add repositories")
-	}
 
 	// Get initial search query
 	var initialQuery string
@@ -195,16 +188,9 @@ func runFindCommit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("fzf is required for this command")
 	}
 
-	// Load configuration
+	// Configuration is already loaded and repositories checked by tools group's PersistentPreRunE
 	configMgr := di.ConfigManager()
-	if err := configMgr.Load(); err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
-	}
-
 	cfg := configMgr.GetConfig()
-	if len(cfg.Repositories) == 0 {
-		return fmt.Errorf("no repositories configured. Use 'gman add' to add repositories")
-	}
 
 	// Get initial search query
 	var initialQuery string
@@ -368,16 +354,9 @@ func runFindContent(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("required tools not available")
 	}
 
-	// Load configuration
+	// Configuration is already loaded and repositories checked by tools group's PersistentPreRunE
 	configMgr := di.ConfigManager()
-	if err := configMgr.Load(); err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
-	}
-
 	cfg := configMgr.GetConfig()
-	if len(cfg.Repositories) == 0 {
-		return fmt.Errorf("no repositories configured. Use 'gman repo add' to add repositories")
-	}
 
 	// Get search pattern (required)
 	searchPattern := args[0]

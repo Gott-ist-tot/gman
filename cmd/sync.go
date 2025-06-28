@@ -48,11 +48,10 @@ func init() {
 }
 
 func runSync(cmd *cobra.Command, args []string) error {
-	// Load and validate configuration
-	configMgr, cfg, err := validateAndLoadConfig()
-	if err != nil {
-		return err
-	}
+	// Configuration is already loaded by PersistentPreRunE
+	// Repository check is already done by work group's PersistentPreRunE
+	configMgr := di.ConfigManager()
+	cfg := configMgr.GetConfig()
 
 	// Determine which repositories to sync
 	reposToSync, err := determineRepositoriesToSync(configMgr, cfg)
@@ -94,20 +93,6 @@ type syncResult struct {
 // No filtering - sync all repositories for simplicity and consistency
 
 // validateAndLoadConfig loads and validates the configuration
-func validateAndLoadConfig() (*config.Manager, *types.Config, error) {
-	configMgr := di.ConfigManager()
-	if err := configMgr.Load(); err != nil {
-		return nil, nil, fmt.Errorf("failed to load configuration: %w", err)
-	}
-
-	cfg := configMgr.GetConfig()
-	if len(cfg.Repositories) == 0 {
-		fmt.Println("No repositories configured. Use 'gman add' to add repositories.")
-		return configMgr, cfg, nil
-	}
-
-	return configMgr, cfg, nil
-}
 
 // determineRepositoriesToSync determines which repositories to sync
 func determineRepositoriesToSync(configMgr *config.Manager, cfg *types.Config) (map[string]string, error) {

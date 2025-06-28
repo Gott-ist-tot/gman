@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"fmt"
-
 	"gman/internal/di"
 	"gman/internal/display"
 
@@ -26,10 +24,8 @@ func init() {
 
 func runList(cmd *cobra.Command, args []string) error {
 	// Load configuration
+	// Configuration is already loaded by root command's PersistentPreRunE
 	configMgr := di.ConfigManager()
-	if err := configMgr.Load(); err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
-	}
 
 	cfg := configMgr.GetConfig()
 	display.PrintRepositoryList(cfg.Repositories)

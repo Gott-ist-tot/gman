@@ -53,6 +53,16 @@ repositories:
 	// Reset DI container for testing
 	di.Reset()
 
+	// Skip repository check for testing
+	os.Setenv("GMAN_SKIP_REPO_CHECK", "true")
+	defer os.Unsetenv("GMAN_SKIP_REPO_CHECK")
+
+	// Manually load the configuration for testing
+	configMgr := di.ConfigManager()
+	if err := configMgr.Load(); err != nil {
+		t.Fatalf("Failed to load test config: %v", err)
+	}
+
 	tests := []struct {
 		name        string
 		args        []string
@@ -80,9 +90,9 @@ repositories:
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Reset flags
-			extendedStatus = false
+			verboseStatus = false
 			if ext, ok := tt.flags["extended"]; ok {
-				extendedStatus = ext
+				verboseStatus = ext
 			}
 
 			// Capture output
@@ -146,6 +156,16 @@ func TestStatusCommandWithNoRepositories(t *testing.T) {
 
 	// Reset DI container for testing
 	di.Reset()
+
+	// Skip repository check for testing
+	os.Setenv("GMAN_SKIP_REPO_CHECK", "true")
+	defer os.Unsetenv("GMAN_SKIP_REPO_CHECK")
+
+	// Manually load the configuration for testing
+	configMgr := di.ConfigManager()
+	if err := configMgr.Load(); err != nil {
+		t.Fatalf("Failed to load test config: %v", err)
+	}
 
 	// Capture output
 	var buf bytes.Buffer

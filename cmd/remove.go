@@ -25,10 +25,8 @@ The actual repository files on disk are not affected.`,
 		}
 
 		// Load config and return repository aliases for completion
+		// Configuration is already loaded by root command's PersistentPreRunE
 		configMgr := di.ConfigManager()
-		if err := configMgr.Load(); err != nil {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
 
 		cfg := configMgr.GetConfig()
 		var aliases []string
@@ -48,10 +46,8 @@ func runRemove(cmd *cobra.Command, args []string) error {
 	alias := args[0]
 
 	// Load configuration
+	// Configuration is already loaded by root command's PersistentPreRunE
 	configMgr := di.ConfigManager()
-	if err := configMgr.Load(); err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
-	}
 
 	// Get the path before removing (for display)
 	cfg := configMgr.GetConfig()
