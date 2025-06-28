@@ -32,8 +32,9 @@ var rootCmd = &cobra.Command{
   gman stash save "work in progress"  # Stash changes across repositories
 
 🔍 SEARCH & DISCOVERY:
-  gman tools find "config.yaml"      # Search files across all repositories
-  gman tools index build             # Build search index for fast searching
+  gman tools find file "config.yaml" # Real-time file search across repositories
+  gman tools find content "TODO"     # Search file content with ripgrep
+  gman tools find commit "fix bug"   # Search commits with git log
   gman tools setup discover ~/Projects # Auto-discover Git repositories
 
 💡 TIP: Use 'gman <group> --help' to see all commands in each group.

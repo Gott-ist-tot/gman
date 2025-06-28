@@ -9,31 +9,31 @@ import (
 	"gman/internal/di"
 	"gman/internal/external"
 	"gman/internal/fzf"
-	"gman/internal/index"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
 
 var (
-	findGroupFilter  string
-	findRebuildIndex bool
-	findEditor       string
+	findGroupFilter string
+	findEditor      string
 )
 
 // findCmd represents the find command
 var findCmd = &cobra.Command{
 	Use:   "find",
-	Short: "Search across repositories using fzf",
-	Long: `Search for files and commits across all managed repositories using fuzzy search.
-This command integrates with fzf to provide a fast, interactive search experience
-with preview capabilities.
+	Short: "Real-time search across repositories using modern tools",
+	Long: `Search for files, content, and commits across all managed repositories using real-time tools.
+This command uses fd for lightning-fast file search, ripgrep for powerful content search,
+and native git log for always-current commit search, all integrated with fzf for an
+interactive selection experience.
 
 Examples:
-  gman find file                        # Search all files
+  gman find file                        # Browse all files with fd
   gman find file config                 # Search files matching "config"
   gman find file --group backend        # Search files in backend group
-  gman find commit                      # Search all commits
+  gman find content "TODO"              # Search file content with ripgrep
+  gman find commit                      # Browse all commits with git log
   gman find commit "fix bug"            # Search commits matching "fix bug"`,
 }
 
@@ -62,9 +62,10 @@ Key bindings in fzf:
 var findCommitCmd = &cobra.Command{
 	Use:   "commit [initial_pattern]",
 	Short: "Search for commits across repositories",
-	Long: `Search for commits across all managed repositories using fuzzy search.
-Commits are indexed for fast searching. The search supports fuzzy matching
-on commit messages, authors, and provides real-time preview of commit diffs.
+	Long: `Search for commits across all managed repositories using real-time git log.
+Uses native git log with grep patterns for instant, always-current results.
+The search supports fuzzy matching on commit messages and provides real-time 
+preview of commit diffs.
 
 Examples:
   gman find commit                  # Browse all commits
@@ -107,7 +108,6 @@ func init() {
 
 	// Common flags
 	findCmd.PersistentFlags().StringVar(&findGroupFilter, "group", "", "Filter by repository group")
-	findCmd.PersistentFlags().BoolVar(&findRebuildIndex, "rebuild", false, "Force rebuild the search index (only affects commit search)")
 
 	// File-specific flags
 	findFileCmd.Flags().StringVar(&findEditor, "editor", "", "Editor to use when opening files (default: $EDITOR)")
@@ -206,32 +206,58 @@ func runFindCommit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no repositories configured. Use 'gman add' to add repositories")
 	}
 
-	// Initialize searcher
-	searcher, err := index.NewSearcher(configMgr)
-	if err != nil {
-		return fmt.Errorf("failed to initialize searcher: %w", err)
-	}
-	defer searcher.Close()
-
-	// Ensure index exists
-	fmt.Fprintf(os.Stderr, "%s\n", color.BlueString("🔍 Preparing search index..."))
-	if err := searcher.EnsureIndex(cfg.Repositories, findRebuildIndex); err != nil {
-		return fmt.Errorf("failed to prepare search index: %w", err)
-	}
-
 	// Get initial search query
 	var initialQuery string
 	if len(args) > 0 {
 		initialQuery = args[0]
 	}
 
-	// Search for commits
-	results, err := searcher.SearchCommits(initialQuery, findGroupFilter, cfg.Repositories)
-	if err != nil {
-		return fmt.Errorf("failed to search commits: %w", err)
+	fmt.Fprintf(os.Stderr, "%s\n", color.BlueString("🔍 Searching commits with real-time git log..."))
+
+	// Filter repositories by group if specified
+	repositories := cfg.Repositories
+	if findGroupFilter != "" {
+		groupRepos, err := configMgr.GetGroupRepositories(findGroupFilter)
+		if err != nil {
+			return fmt.Errorf("failed to get group repositories: %w", err)
+		}
+		repositories = groupRepos
 	}
 
-	if len(results) == 0 {
+	// Collect commits from all repositories using git log
+	var allCommits []string
+	var totalCommits int
+
+	for alias, path := range repositories {
+		// Build git log command - search commit messages if query provided
+		gitArgs := []string{"log", "--oneline", "--all", "--decorate", "--color=always", "-n", "100"}
+		if initialQuery != "" {
+			gitArgs = append(gitArgs, fmt.Sprintf("--grep=%s", initialQuery))
+		}
+
+		// Execute git log
+		gitCmd := exec.Command("git", gitArgs...)
+		gitCmd.Dir = path
+		output, err := gitCmd.Output()
+		if err != nil {
+			// Skip repositories that don't have commits or have errors
+			continue
+		}
+
+		if len(output) > 0 {
+			lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+			for _, line := range lines {
+				if line != "" {
+					// Prefix each commit with repository alias
+					commitEntry := fmt.Sprintf("[%s] %s", color.CyanString(alias), line)
+					allCommits = append(allCommits, commitEntry)
+					totalCommits++
+				}
+			}
+		}
+	}
+
+	if len(allCommits) == 0 {
 		fmt.Printf("%s No commits found", color.YellowString("⚠️"))
 		if initialQuery != "" {
 			fmt.Printf(" matching '%s'", initialQuery)
@@ -243,35 +269,48 @@ func runFindCommit(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Format results for fzf
-	fzfInput := searcher.FormatCommitSearchResults(results)
-
 	// Create fzf finder
 	finder, err := fzf.NewFinder()
 	if err != nil {
 		return fmt.Errorf("failed to create fzf finder: %w", err)
 	}
 
-	// Set up preview
-	previewGen := fzf.NewPreviewGenerator()
-	previewCmd := previewGen.BuildCommitPreviewCommand(cfg.Repositories)
-
-	// Configure fzf options
+	// Configure fzf options for commit search
 	opts := fzf.DefaultCommitOptions()
-	opts.Preview = previewCmd
 	opts.InitialQuery = initialQuery
-
+	
 	// Add header with stats
-	statsInfo := fmt.Sprintf("Found %d commits", len(results))
+	statsInfo := fmt.Sprintf("Found %d commits across %d repositories", totalCommits, len(repositories))
 	if findGroupFilter != "" {
 		statsInfo += fmt.Sprintf(" in group '%s'", findGroupFilter)
 	}
 	opts.Header = statsInfo + " | Press Enter to select, Ctrl-C to cancel"
 
-	fmt.Fprintf(os.Stderr, "%s\n", color.GreenString("✅ Index ready. Launching fzf..."))
+	// Set up preview command for commit details
+	opts.Preview = `
+		line={1}
+		repo=$(echo "$line" | sed 's/\[//g' | sed 's/\].*//g')
+		hash=$(echo "$line" | awk '{print $2}')
+		if [ ! -z "$repo" ] && [ ! -z "$hash" ]; then
+			# Find repository path
+			repo_path=""
+			` + func() string {
+		var paths []string
+		for alias, path := range repositories {
+			paths = append(paths, fmt.Sprintf(`if [ "$repo" = "%s" ]; then repo_path="%s"; fi`, alias, path))
+		}
+		return strings.Join(paths, "\n			")
+	}() + `
+			if [ ! -z "$repo_path" ]; then
+				cd "$repo_path" && git show --color=always "$hash"
+			fi
+		fi
+	`
 
-	// Launch fzf
-	selection, err := finder.FindSingle(fzfInput, opts)
+	fmt.Fprintf(os.Stderr, "%s\n", color.GreenString("✅ Ready. Launching fzf..."))
+
+	// Launch fzf with commit data
+	selection, err := finder.FindSingle(allCommits, opts)
 	if err != nil {
 		if strings.Contains(err.Error(), "canceled") {
 			fmt.Fprintf(os.Stderr, "%s\n", color.YellowString("Selection canceled"))
@@ -280,14 +319,16 @@ func runFindCommit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("fzf selection failed: %w", err)
 	}
 
-	// Parse selection and get commit hash
-	selectedResult, err := searcher.ParseCommitSelection(selection, results)
-	if err != nil {
-		return fmt.Errorf("failed to parse selection: %w", err)
+	// Parse selection to extract commit hash
+	parts := strings.Fields(selection)
+	if len(parts) >= 2 {
+		// Extract commit hash (second field after repository name)
+		commitHash := parts[1]
+		fmt.Println(commitHash)
+	} else {
+		return fmt.Errorf("invalid selection format")
 	}
 
-	// Output the selected commit hash
-	fmt.Println(selectedResult.Hash)
 	return nil
 }
 

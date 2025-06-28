@@ -17,8 +17,8 @@ type GitManager struct {
 
 // NewGitManager creates a new Git manager facade
 func NewGitManager() *GitManager {
-	// Create the hybrid manager which implements all interfaces with optimizations
-	manager := NewHybridManager()
+	// Create the native manager which implements all interfaces
+	manager := NewManager()
 
 	return &GitManager{
 		status:   manager,

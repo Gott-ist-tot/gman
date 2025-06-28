@@ -14,7 +14,6 @@ import (
 	"gman/internal/config"
 	"gman/internal/external"
 	"gman/internal/fzf"
-	"gman/internal/index"
 	"gman/internal/tui/models"
 	"gman/internal/tui/panels"
 	"gman/internal/tui/styles"
@@ -660,23 +659,25 @@ func (a *App) performFileSearch(ctx context.Context, query string, repos map[str
 	a.sendSearchComplete(models.SearchFiles, query, results)
 }
 
-// performCommitSearch performs commit search using the original index system
+// performCommitSearch performs commit search - temporarily disabled during refactoring
 func (a *App) performCommitSearch(ctx context.Context, query string, repos map[string]string) {
-	// Create index searcher for commit search
-	searcher, err := index.NewSearcher(a.state.ConfigManager)
-	if err != nil {
-		a.sendSearchError(models.SearchCommits, query, fmt.Errorf("failed to create commit searcher: %w", err))
-		return
-	}
-	defer searcher.Close()
+	// TODO: Update TUI commit search to use new real-time git log approach
+	// For now, disable commit search in TUI until we can update it properly
+	a.sendSearchError(models.SearchCommits, query, fmt.Errorf("commit search temporarily disabled during refactoring - use 'gman tools find commit' instead"))
+	return
 	
+	// Placeholder for future implementation using git log --grep approach
+	/*
 	a.sendSearchProgress(models.SearchCommits, query, 30, "Searching commits...", nil)
 	
-	// Perform commit search using existing index system
-	searchResults, err := a.searchWithProgress(ctx, func() ([]index.SearchResult, error) {
-		return searcher.SearchCommits("", query, repos)
+	// Perform commit search using new git log approach
+	searchResults, err := a.searchWithProgress(ctx, func() ([]SearchResult, error) {
+		// Implement git log --grep based search here
+		return nil, fmt.Errorf("not implemented yet")
 	}, models.SearchCommits, query)
+	*/
 	
+	/* Old implementation - commented out during refactoring
 	// Check for cancellation after search
 	if ctx.Err() != nil {
 		a.sendSearchCancelled(models.SearchCommits, query)
@@ -687,7 +688,9 @@ func (a *App) performCommitSearch(ctx context.Context, query string, repos map[s
 		a.sendSearchError(models.SearchCommits, query, fmt.Errorf("commit search failed: %w", err))
 		return
 	}
+	*/
 
+	/* Old implementation - commented out during refactoring
 	// Convert results
 	a.sendSearchProgress(models.SearchCommits, query, 90, "Processing commit results...", nil)
 	
@@ -711,41 +714,13 @@ func (a *App) performCommitSearch(ctx context.Context, query string, repos map[s
 
 	// Send final results
 	a.sendSearchComplete(models.SearchCommits, query, results)
+	*/
 }
 
-// searchWithProgress wraps search operations with progress updates
-func (a *App) searchWithProgress(ctx context.Context, searchFunc func() ([]index.SearchResult, error), mode models.SearchMode, query string) ([]index.SearchResult, error) {
-	// Run search in a separate goroutine
-	resultChan := make(chan []index.SearchResult, 1)
-	errorChan := make(chan error, 1)
-	
-	go func() {
-		results, err := searchFunc()
-		if err != nil {
-			errorChan <- err
-		} else {
-			resultChan <- results
-		}
-	}()
-	
-	// Send progress updates while waiting
-	ticker := time.NewTicker(500 * time.Millisecond)
-	defer ticker.Stop()
-	
-	progress := 30
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case results := <-resultChan:
-			return results, nil
-		case err := <-errorChan:
-			return nil, err
-		case <-ticker.C:
-			progress = min(progress + 10, 80)
-			a.sendSearchProgress(mode, query, progress, "Searching...", nil)
-		}
-	}
+// searchWithProgress wraps search operations with progress updates - temporarily disabled
+func (a *App) searchWithProgress(ctx context.Context, searchFunc func() ([]models.SearchResultItem, error), mode models.SearchMode, query string) ([]models.SearchResultItem, error) {
+	// TODO: Update during TUI refactoring to use new git log approach
+	return nil, fmt.Errorf("search functionality temporarily disabled during refactoring")
 }
 
 // Helper functions to send search messages asynchronously
@@ -810,6 +785,10 @@ func min(a, b int) int {
 
 // buildFzfCommand constructs the fzf command for the given search mode
 func (a *App) buildFzfCommand(mode models.SearchMode, query string) *exec.Cmd {
+	// TODO: Update TUI search to use new real-time approach during refactoring
+	return exec.Command("echo", "TUI search temporarily disabled - use 'gman tools find' commands instead")
+	
+	/* Original implementation - commented out during refactoring
 	// Check if fzf is available
 	if !fzf.IsAvailable() {
 		return exec.Command("echo", "fzf not available")
@@ -821,7 +800,9 @@ func (a *App) buildFzfCommand(mode models.SearchMode, query string) *exec.Cmd {
 		return exec.Command("echo", fmt.Sprintf("Error creating searcher: %v", err))
 	}
 	defer searcher.Close()
+	*/
 
+	/* Original implementation - commented out during refactoring
 	var cmd *exec.Cmd
 
 	switch mode {
@@ -871,6 +852,7 @@ func (a *App) buildFzfCommand(mode models.SearchMode, query string) *exec.Cmd {
 	}
 
 	return cmd
+	*/
 }
 
 // buildFzfArgs converts fzf options to command line arguments
