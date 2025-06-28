@@ -38,6 +38,11 @@ var rootCmd = &cobra.Command{
   gman tools find commit "fix bug"   # Enhanced commit search across repositories
   gman tools setup discover ~/Projects # Auto-discover and configure Git repositories
 
+📋 TASK MANAGEMENT & EXTERNAL TOOL INTEGRATION:
+  gman tools task create feature-auth  # Create task-oriented file collections
+  gman tools task add auth src/*.go    # Add files to task collections
+  gman tools task list-files auth | xargs aider  # External tool integration (aider, linters, etc.)
+
 🏥 SYSTEM HEALTH & DIAGNOSTICS:
   gman tools health                   # Comprehensive system health check
   gman tools health --fix            # Show installation commands for missing tools

@@ -91,6 +91,7 @@ func (m *Manager) GetConfig() *types.Config {
 		m.config = &types.Config{
 			Repositories: make(map[string]string),
 			Groups:       make(map[string]types.Group),
+			Tasks:        make(map[string]types.Task),
 			RecentUsage:  make([]types.RecentEntry, 0),
 			Settings: types.Settings{
 				DefaultSyncMode: "ff-only",
@@ -526,4 +527,223 @@ func (m *Manager) validateAlias(alias string) error {
 	}
 	
 	return nil
+}
+
+// CreateTask creates a new task
+func (m *Manager) CreateTask(name, description string) error {
+	if m.config.Tasks == nil {
+		m.config.Tasks = make(map[string]types.Task)
+	}
+
+	// Check if task already exists
+	if _, exists := m.config.Tasks[name]; exists {
+		return fmt.Errorf("task '%s' already exists", name)
+	}
+
+	// Validate task name
+	if err := m.validateAlias(name); err != nil {
+		return fmt.Errorf("invalid task name '%s': %w", name, err)
+	}
+
+	// Create task
+	task := types.Task{
+		Name:        name,
+		Description: description,
+		Files:       []types.TaskFile{},
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	m.config.Tasks[name] = task
+	return m.Save()
+}
+
+// DeleteTask removes a task
+func (m *Manager) DeleteTask(name string) error {
+	if m.config.Tasks == nil {
+		return fmt.Errorf("no tasks configured")
+	}
+
+	if _, exists := m.config.Tasks[name]; !exists {
+		return fmt.Errorf("task '%s' not found", name)
+	}
+
+	delete(m.config.Tasks, name)
+	return m.Save()
+}
+
+// GetTasks returns all configured tasks
+func (m *Manager) GetTasks() map[string]types.Task {
+	if m.config.Tasks == nil {
+		return make(map[string]types.Task)
+	}
+	return m.config.Tasks
+}
+
+// GetTask returns a specific task
+func (m *Manager) GetTask(name string) (types.Task, error) {
+	if m.config.Tasks == nil {
+		return types.Task{}, fmt.Errorf("no tasks configured")
+	}
+
+	task, exists := m.config.Tasks[name]
+	if !exists {
+		return types.Task{}, fmt.Errorf("task '%s' not found", name)
+	}
+
+	return task, nil
+}
+
+// AddFilesToTask adds files to an existing task
+func (m *Manager) AddFilesToTask(taskName string, filePaths []string) error {
+	if m.config.Tasks == nil {
+		return fmt.Errorf("no tasks configured")
+	}
+
+	task, exists := m.config.Tasks[taskName]
+	if !exists {
+		return fmt.Errorf("task '%s' not found", taskName)
+	}
+
+	now := time.Now()
+	
+	for _, filePath := range filePaths {
+		// Expand and validate path
+		expandedPath, err := expandPath(filePath)
+		if err != nil {
+			return fmt.Errorf("error expanding path '%s': %w", filePath, err)
+		}
+
+		// Check if file exists
+		if _, err := os.Stat(expandedPath); err != nil {
+			return fmt.Errorf("file '%s' does not exist: %w", expandedPath, err)
+		}
+
+		// Find which repository this file belongs to
+		repoAlias, relativePath, err := m.findRepositoryForFile(expandedPath)
+		if err != nil {
+			return fmt.Errorf("could not determine repository for file '%s': %w", expandedPath, err)
+		}
+
+		// Check if file is already in task
+		exists := false
+		for _, existing := range task.Files {
+			if existing.FullPath == expandedPath {
+				exists = true
+				break
+			}
+		}
+
+		if !exists {
+			taskFile := types.TaskFile{
+				Repository:   repoAlias,
+				RelativePath: relativePath,
+				FullPath:     expandedPath,
+				AddedAt:      now,
+			}
+			task.Files = append(task.Files, taskFile)
+		}
+	}
+
+	task.UpdatedAt = now
+	m.config.Tasks[taskName] = task
+	return m.Save()
+}
+
+// RemoveFilesFromTask removes files from a task
+func (m *Manager) RemoveFilesFromTask(taskName string, filePaths []string) error {
+	if m.config.Tasks == nil {
+		return fmt.Errorf("no tasks configured")
+	}
+
+	task, exists := m.config.Tasks[taskName]
+	if !exists {
+		return fmt.Errorf("task '%s' not found", taskName)
+	}
+
+	// Convert file paths to absolute paths for comparison
+	var absFilePaths []string
+	for _, filePath := range filePaths {
+		expandedPath, err := expandPath(filePath)
+		if err != nil {
+			return fmt.Errorf("error expanding path '%s': %w", filePath, err)
+		}
+		absFilePaths = append(absFilePaths, expandedPath)
+	}
+
+	// Remove files
+	var newFiles []types.TaskFile
+	for _, taskFile := range task.Files {
+		shouldRemove := false
+		for _, pathToRemove := range absFilePaths {
+			if taskFile.FullPath == pathToRemove {
+				shouldRemove = true
+				break
+			}
+		}
+		if !shouldRemove {
+			newFiles = append(newFiles, taskFile)
+		}
+	}
+
+	task.Files = newFiles
+	task.UpdatedAt = time.Now()
+	m.config.Tasks[taskName] = task
+	return m.Save()
+}
+
+// GetTaskFiles returns the file paths for a specific task (core API for external tool integration)
+func (m *Manager) GetTaskFiles(taskName string) ([]string, error) {
+	task, err := m.GetTask(taskName)
+	if err != nil {
+		return nil, err
+	}
+
+	var filePaths []string
+	for _, taskFile := range task.Files {
+		// Verify file still exists
+		if _, err := os.Stat(taskFile.FullPath); err == nil {
+			filePaths = append(filePaths, taskFile.FullPath)
+		}
+	}
+
+	return filePaths, nil
+}
+
+// findRepositoryForFile determines which repository a file belongs to
+func (m *Manager) findRepositoryForFile(filePath string) (string, string, error) {
+	absPath := filepath.Clean(filePath)
+	
+	// Find the repository that contains this file
+	var bestMatch string
+	var bestAlias string
+	var bestMatchLen int
+	
+	for alias, repoPath := range m.config.Repositories {
+		expandedRepoPath, err := expandPath(repoPath)
+		if err != nil {
+			continue
+		}
+		
+		expandedRepoPath = filepath.Clean(expandedRepoPath)
+		
+		// Check if file is within this repository
+		if strings.HasPrefix(absPath, expandedRepoPath) && len(expandedRepoPath) > bestMatchLen {
+			bestMatch = expandedRepoPath
+			bestAlias = alias
+			bestMatchLen = len(expandedRepoPath)
+		}
+	}
+	
+	if bestMatch == "" {
+		return "", "", fmt.Errorf("file is not within any configured repository")
+	}
+	
+	// Calculate relative path
+	relativePath, err := filepath.Rel(bestMatch, absPath)
+	if err != nil {
+		return "", "", fmt.Errorf("error calculating relative path: %w", err)
+	}
+	
+	return bestAlias, relativePath, nil
 }

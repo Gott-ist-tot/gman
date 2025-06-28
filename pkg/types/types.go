@@ -12,6 +12,7 @@ type Config struct {
 	Settings       Settings          `yaml:"settings,omitempty"`
 	RecentUsage    []RecentEntry     `yaml:"recent_usage,omitempty"`
 	Groups         map[string]Group  `yaml:"groups,omitempty"`
+	Tasks          map[string]Task   `yaml:"tasks,omitempty"`
 }
 
 // Settings contains user preferences
@@ -121,4 +122,21 @@ type SwitchTarget struct {
 	Branch       string    `json:"branch,omitempty"` // Current branch (for worktrees)
 	Description  string    `json:"description,omitempty"` // Additional info
 	LastAccessed time.Time `json:"last_accessed,omitempty"` // For recent repository tracking
+}
+
+// TaskFile represents a file within a task context
+type TaskFile struct {
+	Repository   string `yaml:"repository"`    // Repository alias where the file belongs
+	RelativePath string `yaml:"relative_path"` // Path relative to repository root
+	FullPath     string `yaml:"full_path"`     // Absolute path to the file
+	AddedAt      time.Time `yaml:"added_at"`   // When this file was added to the task
+}
+
+// Task represents a collection of files across repositories for development tasks
+type Task struct {
+	Name        string     `yaml:"name"`
+	Description string     `yaml:"description,omitempty"`
+	Files       []TaskFile `yaml:"files"`
+	CreatedAt   time.Time  `yaml:"created_at"`
+	UpdatedAt   time.Time  `yaml:"updated_at"`
 }
