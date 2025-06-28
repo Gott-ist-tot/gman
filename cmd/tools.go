@@ -12,17 +12,17 @@ var toolsCmd = &cobra.Command{
 
 This command group includes:
 - real-time search capabilities
-- worktree management  
 - interactive dashboard
 - setup and configuration tools
 - shell integration utilities
+- system health diagnostics
 
 Examples:
   gman tools find file config.yaml          # Search for files across repositories
   gman tools find commit "bug fix"          # Search commits across repositories
   gman tools find content "TODO"            # Search file content across repositories
   gman tools dashboard                       # Launch interactive TUI
-  gman tools worktree add backend feature-auth  # Create worktree`,
+  gman tools health                          # System diagnostics and health check`,
 	Aliases: []string{"t"},
 }
 
@@ -33,9 +33,10 @@ func init() {
 	// Add original commands directly to tools group to preserve subcommands
 	toolsCmd.AddCommand(findCmd)
 	toolsCmd.AddCommand(dashboardCmd)
-	toolsCmd.AddCommand(worktreeCmd)
 	toolsCmd.AddCommand(setupCmd)
 	toolsCmd.AddCommand(completionCmd)
+	toolsCmd.AddCommand(initCmd)
+	toolsCmd.AddCommand(healthCmd)
 
 	// Add onboarding as subcommand (for advanced users who want direct access)
 	toolsCmd.AddCommand(onboardingCmd)

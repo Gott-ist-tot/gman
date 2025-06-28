@@ -7,7 +7,6 @@ import (
 
 	"gman/internal/config"
 	"gman/internal/di"
-	"gman/internal/git"
 	"gman/internal/progress"
 	"gman/pkg/types"
 
@@ -15,37 +14,27 @@ import (
 )
 
 var (
-	syncMode      string
-	syncRebase    bool
-	syncAutostash bool
-	onlyDirty     bool
-	onlyBehind    bool
-	onlyAhead     bool
-	dryRun        bool
-	showProgress  bool
-	groupName     string
+	dryRun       bool
+	showProgress bool
+	groupName    string
 )
 
 // syncCmd represents the sync command
 var syncCmd = &cobra.Command{
 	Use:   "sync",
-	Short: "Synchronize all repositories with their remotes",
-	Long: `Synchronize all configured repositories with their remote origins.
-This command runs git pull on all repositories concurrently.
+	Short: "Safely synchronize all repositories with their remotes",
+	Long: `Safely synchronize all configured repositories with their remote origins.
+This command performs git pull --ff-only on all repositories concurrently for maximum safety.
 
-Sync modes:
-  ff-only    : Only fast-forward merges (default, safest)
-  rebase     : Use git pull --rebase
-  autostash  : Use git pull --autostash
+The sync operation will only succeed if the merge can be fast-forwarded,
+preventing accidental merge commits and preserving repository history.
 
-Conditional sync options:
-  --only-dirty   : Sync only repositories with uncommitted changes
-  --only-behind  : Sync only repositories that are behind remote
-  --only-ahead   : Sync only repositories with unpushed commits
+Options:
   --dry-run      : Show what would be synced without executing
   --progress     : Show detailed progress during sync operations
   --group        : Sync only repositories in the specified group
-`,
+
+For more complex merge strategies, use native git commands in individual repositories.`,
 	RunE: runSync,
 }
 
@@ -53,14 +42,6 @@ func init() {
 	// Command is now available via: gman work sync
 	// Removed direct rootCmd registration to avoid duplication
 
-	syncCmd.Flags().StringVar(&syncMode, "mode", "", "Sync mode: ff-only, rebase, autostash")
-	syncCmd.Flags().BoolVar(&syncRebase, "rebase", false, "Use git pull --rebase")
-	syncCmd.Flags().BoolVar(&syncAutostash, "autostash", false, "Use git pull --autostash")
-
-	// Conditional sync options
-	syncCmd.Flags().BoolVar(&onlyDirty, "only-dirty", false, "Sync only repositories with uncommitted changes")
-	syncCmd.Flags().BoolVar(&onlyBehind, "only-behind", false, "Sync only repositories that are behind remote")
-	syncCmd.Flags().BoolVar(&onlyAhead, "only-ahead", false, "Sync only repositories with unpushed commits")
 	syncCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show what would be synced without executing")
 	syncCmd.Flags().BoolVar(&showProgress, "progress", false, "Show detailed progress during sync operations")
 	syncCmd.Flags().StringVar(&groupName, "group", "", "Sync only repositories in the specified group")
@@ -74,23 +55,23 @@ func runSync(cmd *cobra.Command, args []string) error {
 	}
 
 	// Determine which repositories to sync
-	filteredRepos, mode, err := determineRepositoriesToSync(configMgr, cfg)
+	reposToSync, err := determineRepositoriesToSync(configMgr, cfg)
 	if err != nil {
 		return err
 	}
 
-	if len(filteredRepos) == 0 {
-		fmt.Println("No repositories match the specified criteria.")
+	if len(reposToSync) == 0 {
+		fmt.Println("No repositories found.")
 		return nil
 	}
 
 	// Handle dry-run mode
 	if dryRun {
-		return displayDryRunPreview(filteredRepos, mode)
+		return displayDryRunPreview(reposToSync)
 	}
 
-	// Execute the actual sync operations
-	results, err := executeSyncOperations(filteredRepos, mode, cfg)
+	// Execute the actual sync operations (always ff-only mode)
+	results, err := executeSyncOperations(reposToSync, cfg)
 	if err != nil {
 		return err
 	}
@@ -99,24 +80,8 @@ func runSync(cmd *cobra.Command, args []string) error {
 	return displaySyncResults(results)
 }
 
-func determineSyncMode(cfg *types.Config) string {
-	// Command line flags take precedence
-	if syncRebase {
-		return "rebase"
-	}
-	if syncAutostash {
-		return "autostash"
-	}
-	if syncMode != "" {
-		return syncMode
-	}
-
-	// Use config default
-	if cfg.Settings.DefaultSyncMode != "" {
-		return cfg.Settings.DefaultSyncMode
-	}
-
-	// Default to ff-only (safest)
+// Always use ff-only mode for safety
+func getSyncMode() string {
 	return "ff-only"
 }
 
@@ -126,46 +91,7 @@ type syncResult struct {
 	error error
 }
 
-// filterRepositories filters repositories based on conditional sync options
-func filterRepositories(repos map[string]string, statusReader git.StatusReader) (map[string]string, error) {
-	// If no filter options are specified, return all repositories
-	if !onlyDirty && !onlyBehind && !onlyAhead {
-		return repos, nil
-	}
-
-	filtered := make(map[string]string)
-
-	for alias, path := range repos {
-		// Get repository status
-		status := statusReader.GetRepoStatus(alias, path)
-		if status.Error != nil {
-			// Skip repositories with errors, but log them
-			fmt.Printf("Warning: Skipping %s due to error: %v\n", alias, status.Error)
-			continue
-		}
-
-		shouldInclude := false
-
-		// Check conditions
-		if onlyDirty && status.Workspace != types.Clean {
-			shouldInclude = true
-		}
-
-		if onlyBehind && status.SyncStatus.Behind > 0 {
-			shouldInclude = true
-		}
-
-		if onlyAhead && status.SyncStatus.Ahead > 0 {
-			shouldInclude = true
-		}
-
-		if shouldInclude {
-			filtered[alias] = path
-		}
-	}
-
-	return filtered, nil
-}
+// No filtering - sync all repositories for simplicity and consistency
 
 // validateAndLoadConfig loads and validates the configuration
 func validateAndLoadConfig() (*config.Manager, *types.Config, error) {
@@ -183,8 +109,8 @@ func validateAndLoadConfig() (*config.Manager, *types.Config, error) {
 	return configMgr, cfg, nil
 }
 
-// determineRepositoriesToSync determines which repositories to sync and the sync mode
-func determineRepositoriesToSync(configMgr *config.Manager, cfg *types.Config) (map[string]string, string, error) {
+// determineRepositoriesToSync determines which repositories to sync
+func determineRepositoriesToSync(configMgr *config.Manager, cfg *types.Config) (map[string]string, error) {
 	// Get repositories to sync (either all or group-specific)
 	var reposToSync map[string]string
 	var err error
@@ -192,51 +118,39 @@ func determineRepositoriesToSync(configMgr *config.Manager, cfg *types.Config) (
 	if groupName != "" {
 		reposToSync, err = configMgr.GetGroupRepositories(groupName)
 		if err != nil {
-			return nil, "", fmt.Errorf("failed to get group repositories: %w", err)
+			return nil, fmt.Errorf("failed to get group repositories: %w", err)
 		}
 		if len(reposToSync) == 0 {
 			fmt.Printf("Group '%s' has no repositories.\n", groupName)
-			return nil, "", nil
+			return nil, nil
 		}
 	} else {
 		reposToSync = cfg.Repositories
 	}
 
-	// Determine sync mode
-	mode := determineSyncMode(cfg)
-
-	// Get status reader for repository filtering
-	statusReader := di.StatusReader()
-
-	// Filter repositories based on conditions
-	filteredRepos, err := filterRepositories(reposToSync, statusReader)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to filter repositories: %w", err)
-	}
-
-	return filteredRepos, mode, nil
+	return reposToSync, nil
 }
 
 // displayDryRunPreview shows what would be synced in dry-run mode
-func displayDryRunPreview(filteredRepos map[string]string, mode string) error {
+func displayDryRunPreview(reposToSync map[string]string) error {
 	groupInfo := ""
 	if groupName != "" {
 		groupInfo = fmt.Sprintf(" from group '%s'", groupName)
 	}
-	fmt.Printf("DRY RUN: Would synchronize %d repositories%s (mode: %s):\n\n", len(filteredRepos), groupInfo, mode)
-	for alias, path := range filteredRepos {
+	fmt.Printf("DRY RUN: Would synchronize %d repositories%s (mode: ff-only):\n\n", len(reposToSync), groupInfo)
+	for alias, path := range reposToSync {
 		fmt.Printf("  %s → %s\n", alias, path)
 	}
 	return nil
 }
 
 // executeSyncOperations performs the actual sync operations across repositories
-func executeSyncOperations(filteredRepos map[string]string, mode string, cfg *types.Config) ([]syncResult, error) {
+func executeSyncOperations(reposToSync map[string]string, cfg *types.Config) ([]syncResult, error) {
 	// Setup progress tracking
 	var progressBar *progress.MultiBar
 	if showProgress {
 		progressBar = progress.NewMultiBar()
-		for alias := range filteredRepos {
+		for alias := range reposToSync {
 			progressBar.AddOperation(alias)
 		}
 	} else {
@@ -244,11 +158,11 @@ func executeSyncOperations(filteredRepos map[string]string, mode string, cfg *ty
 		if groupName != "" {
 			groupInfo = fmt.Sprintf(" from group '%s'", groupName)
 		}
-		fmt.Printf("Synchronizing %d repositories%s (mode: %s)...\n\n", len(filteredRepos), groupInfo, mode)
+		fmt.Printf("Synchronizing %d repositories%s (mode: ff-only)...\n\n", len(reposToSync), groupInfo)
 	}
 
 	// Use a channel to collect results
-	resultChan := make(chan syncResult, len(filteredRepos))
+	resultChan := make(chan syncResult, len(reposToSync))
 	var wg sync.WaitGroup
 
 	maxConcurrency := cfg.Settings.ParallelJobs
@@ -259,7 +173,7 @@ func executeSyncOperations(filteredRepos map[string]string, mode string, cfg *ty
 	semaphore := make(chan struct{}, maxConcurrency)
 	syncMgr := di.SyncManager()
 
-	for alias, path := range filteredRepos {
+	for alias, path := range reposToSync {
 		wg.Add(1)
 		go func(alias, path string) {
 			defer wg.Done()
@@ -270,7 +184,8 @@ func executeSyncOperations(filteredRepos map[string]string, mode string, cfg *ty
 				progressBar.StartOperation(alias)
 			}
 
-			err := syncMgr.SyncRepository(path, mode)
+			// Always use ff-only mode for safety
+			err := syncMgr.SyncRepository(path, "ff-only")
 
 			if progressBar != nil {
 				progressBar.CompleteOperation(alias, err)

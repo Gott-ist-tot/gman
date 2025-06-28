@@ -114,10 +114,11 @@ type Worktree struct {
 
 // SwitchTarget represents a target that can be switched to (repository or worktree)
 type SwitchTarget struct {
-	Alias       string `json:"alias"`        // Display name for the target
-	Path        string `json:"path"`         // Actual filesystem path
-	Type        string `json:"type"`         // "repository" or "worktree"
-	RepoAlias   string `json:"repo_alias"`   // Parent repository alias (for worktrees)
-	Branch      string `json:"branch,omitempty"` // Current branch (for worktrees)
-	Description string `json:"description,omitempty"` // Additional info
+	Alias        string    `json:"alias"`        // Display name for the target
+	Path         string    `json:"path"`         // Actual filesystem path
+	Type         string    `json:"type"`         // "repository" or "worktree"
+	RepoAlias    string    `json:"repo_alias"`   // Parent repository alias (for worktrees)
+	Branch       string    `json:"branch,omitempty"` // Current branch (for worktrees)
+	Description  string    `json:"description,omitempty"` // Additional info
+	LastAccessed time.Time `json:"last_accessed,omitempty"` // For recent repository tracking
 }

@@ -12,33 +12,40 @@ var cfgFile string
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "gman",
-	Short: "Modern multi-repository Git management tool",
-	Long: `gman is a production-ready CLI tool for efficiently managing multiple Git repositories.
+	Short: "Smart multi-repository Git assistant and navigator",
+	Long: `gman is your intelligent assistant for navigating and monitoring multiple Git repositories.
+🧭 Designed as a "smart副駕駛" that provides powerful observability and safe navigation tools.
 
 🚀 QUICK START:
   gman tools setup                    # Interactive setup wizard for new users
-  gman work status                    # Check status of all repositories
-  gman switch                         # Interactive repository switching with search
+  gman work status                    # Monitor status across all repositories
+  gman switch                         # Smart repository navigation with recent history
   gman tools dashboard                # Launch interactive TUI dashboard
 
 📁 COMMAND GROUPS (with shortcuts):
   gman repo    (r)                    # Repository management (add, remove, list, groups)
-  gman work    (w)                    # Git workflow (status, sync, commit, push, branch)
-  gman tools   (t)                    # Advanced tools (search, dashboard, worktree, setup)
+  gman work    (w)                    # Safe Git workflows (status monitoring, sync)
+  gman tools   (t)                    # Advanced tools (search, dashboard, health, setup)
 
-🔧 BATCH OPERATIONS:
-  gman commit -m "message" --add      # Commit across multiple repositories
-  gman push --group frontend         # Push changes to repository groups
-  gman stash save "work in progress"  # Stash changes across repositories
+🔍 INTELLIGENT NAVIGATION:
+  gman switch                         # Smart switching with recent history priority
+  gman switch --recent               # Show only recently accessed repositories
+  gman work status --verbose        # Detailed multi-repository status overview
 
-🔍 SEARCH & DISCOVERY:
-  gman tools find file "config.yaml" # Real-time file search across repositories
-  gman tools find content "TODO"     # Search file content with ripgrep
-  gman tools find commit "fix bug"   # Search commits with git log
-  gman tools setup discover ~/Projects # Auto-discover Git repositories
+🛠️ SMART DISCOVERY & SEARCH:
+  gman tools find file "config.yaml" # Lightning-fast file search across repositories
+  gman tools find content "TODO"     # Powerful content search with ripgrep
+  gman tools find commit "fix bug"   # Enhanced commit search across repositories
+  gman tools setup discover ~/Projects # Auto-discover and configure Git repositories
 
-💡 TIP: Use 'gman <group> --help' to see all commands in each group.
-🏥 TROUBLESHOOTING: Use 'gman tools dashboard --debug' for TUI diagnostics.`,
+🏥 SYSTEM HEALTH & DIAGNOSTICS:
+  gman tools health                   # Comprehensive system health check
+  gman tools health --fix            # Show installation commands for missing tools
+
+🎯 PHILOSOPHY: gman focuses on safe, read-focused operations and intelligent navigation,
+leaving precise write operations to you and native Git commands for maximum safety.
+
+💡 TIP: Use 'gman <group> --help' to see all commands in each group.`,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

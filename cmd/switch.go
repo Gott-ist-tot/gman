@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"time"
 
 	"gman/internal/di"
 	"gman/internal/interactive"
@@ -13,19 +15,28 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	showRecentOnly bool
+	recentLimit    int
+)
+
 // switchCmd represents the switch command
 var switchCmd = &cobra.Command{
 	Use:   "switch [alias]",
-	Short: "Switch to a repository directory",
+	Short: "Switch to a repository directory with recent history",
 	Long: `Switch to the directory of the specified repository.
-If no alias is provided, an interactive menu will be displayed.
-This command outputs a special format that the shell wrapper function
-can use to change the current working directory.
+If no alias is provided, an interactive menu will be displayed showing
+all repositories with recently accessed ones highlighted at the top.
+
+The interactive menu prioritizes recently accessed repositories to 
+improve navigation efficiency in your daily workflow.
 
 Examples:
   gman switch my-repo       # Switch to 'my-repo'
   gman switch proj          # Fuzzy match repositories containing 'proj'
-  gman switch               # Interactive selection menu`,
+  gman switch               # Interactive selection menu with recent repos first
+  gman switch --recent      # Show only recently accessed repositories
+  gman switch --recent --limit 5    # Show only last 5 accessed repositories`,
 	Args: cobra.RangeArgs(0, 1),
 	RunE: runSwitch,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -50,6 +61,9 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(switchCmd)
+	
+	switchCmd.Flags().BoolVar(&showRecentOnly, "recent", false, "Show only recently accessed repositories")
+	switchCmd.Flags().IntVar(&recentLimit, "limit", 10, "Limit number of recent repositories shown (used with --recent)")
 }
 
 func runSwitch(cmd *cobra.Command, args []string) error {
@@ -80,6 +94,7 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 		fmt.Println("")
 		fmt.Println("Then reload your shell: source ~/.zshrc")
 		fmt.Println("")
+		fmt.Println("💡 Pro tip: Use 'gman tools init shell' for automated setup!")
 		fmt.Println("For more help, see: gman tools setup")
 		return fmt.Errorf("shell integration required")
 	}
@@ -103,6 +118,17 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 
 	if len(targets) == 0 {
 		return fmt.Errorf("no repositories or worktrees available")
+	}
+
+	// Filter targets if --recent flag is used
+	if showRecentOnly {
+		targets = filterRecentTargets(targets, cfg.RecentUsage, recentLimit)
+		if len(targets) == 0 {
+			return fmt.Errorf("no recently accessed repositories found")
+		}
+	} else {
+		// Sort targets with recent repositories first
+		targets = sortTargetsByRecency(targets, cfg.RecentUsage)
 	}
 
 	var selectedTarget *types.SwitchTarget
@@ -301,4 +327,87 @@ func isShellIntegrationActive() bool {
 	// Default: assume shell integration is not active
 	// This will prompt users to set up the wrapper function
 	return false
+}
+
+// filterRecentTargets returns only recently accessed repositories up to the specified limit
+func filterRecentTargets(targets []types.SwitchTarget, recentRepos []types.RecentEntry, limit int) []types.SwitchTarget {
+	if len(recentRepos) == 0 {
+		return []types.SwitchTarget{}
+	}
+
+	var recentTargets []types.SwitchTarget
+	recentMap := make(map[string]types.RecentEntry)
+	
+	// Create a map for quick lookup
+	for _, recent := range recentRepos {
+		recentMap[recent.Alias] = recent
+	}
+
+	// Find targets that match recent repositories
+	for _, target := range targets {
+		if recent, exists := recentMap[target.Alias]; exists {
+			// Add recent information to the target
+			targetCopy := target
+			targetCopy.LastAccessed = recent.AccessTime
+			recentTargets = append(recentTargets, targetCopy)
+		}
+	}
+
+	// Sort by recency (most recent first)
+	sort.Slice(recentTargets, func(i, j int) bool {
+		return recentTargets[i].LastAccessed.After(recentTargets[j].LastAccessed)
+	})
+
+	// Apply limit
+	if limit > 0 && len(recentTargets) > limit {
+		recentTargets = recentTargets[:limit]
+	}
+
+	return recentTargets
+}
+
+// sortTargetsByRecency sorts targets with recent repositories first, then alphabetically
+func sortTargetsByRecency(targets []types.SwitchTarget, recentRepos []types.RecentEntry) []types.SwitchTarget {
+	if len(recentRepos) == 0 {
+		// No recent repositories, just sort alphabetically
+		sort.Slice(targets, func(i, j int) bool {
+			return targets[i].Alias < targets[j].Alias
+		})
+		return targets
+	}
+
+	// Create a map for quick lookup of recent access times
+	recentMap := make(map[string]time.Time)
+	for _, recent := range recentRepos {
+		recentMap[recent.Alias] = recent.AccessTime
+	}
+
+	// Add recent access times to targets
+	for i := range targets {
+		if lastAccessed, exists := recentMap[targets[i].Alias]; exists {
+			targets[i].LastAccessed = lastAccessed
+		}
+	}
+
+	// Sort: recent repositories first (by recency), then non-recent alphabetically
+	sort.Slice(targets, func(i, j int) bool {
+		iRecent := !targets[i].LastAccessed.IsZero()
+		jRecent := !targets[j].LastAccessed.IsZero()
+
+		if iRecent && jRecent {
+			// Both are recent, sort by most recent first
+			return targets[i].LastAccessed.After(targets[j].LastAccessed)
+		} else if iRecent && !jRecent {
+			// i is recent, j is not - i comes first
+			return true
+		} else if !iRecent && jRecent {
+			// j is recent, i is not - j comes first
+			return false
+		} else {
+			// Neither is recent, sort alphabetically
+			return targets[i].Alias < targets[j].Alias
+		}
+	})
+
+	return targets
 }

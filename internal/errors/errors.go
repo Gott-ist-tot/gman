@@ -59,11 +59,9 @@ func GetType(err error) ErrorType {
 	return ""
 }
 
-// GetSeverity returns the severity of a GmanError, or SeverityError for other errors
+// GetSeverity returns the severity of a GmanError (simplified - always returns SeverityError)
 func GetSeverity(err error) Severity {
-	if gErr, ok := As(err); ok {
-		return gErr.Severity
-	}
+	// Simplified - severity removed from GmanError
 	return SeverityError
 }
 
@@ -75,10 +73,16 @@ func IsRecoverable(err error) bool {
 	return false
 }
 
-// IsCritical checks if an error is critical
+// IsCritical checks if an error is critical (simplified - based on error type)
 func IsCritical(err error) bool {
 	if gErr, ok := As(err); ok {
-		return gErr.IsCritical()
+		// Simplified - determine criticality based on error type
+		switch gErr.Type {
+		case ErrTypeConfigNotFound, ErrTypeRepoNotFound, ErrTypeInternal:
+			return true
+		default:
+			return false
+		}
 	}
 	return false
 }
@@ -140,7 +144,7 @@ func SafeExecute(fn func() error) (err error) {
 	return fn()
 }
 
-// RetryableError marks an error as retryable
+// RetryableError marks an error as retryable (simplified)
 type RetryableError struct {
 	*GmanError
 	MaxRetries int

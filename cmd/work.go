@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"gman/cmd/batch"
-
 	"github.com/spf13/cobra"
 )
 
@@ -10,20 +8,15 @@ import (
 var workCmd = &cobra.Command{
 	Use:   "work",
 	Short: "Git workflow commands",
-	Long: `Git workflow commands for day-to-day development operations.
+	Long: `Git workflow commands for safe, read-focused development operations.
 
 This command group includes:
 - status checking across repositories
-- synchronization with remotes  
-- branch management
-- commit and push operations
-- stash management
+- synchronization with remotes (safe pulls only)
 
 Examples:
   gman work status                     # Check status of all repositories
-  gman work sync                       # Sync all repositories
-  gman work branch list               # List branches across repositories
-  gman work commit -m "Fix bug"       # Commit across repositories`,
+  gman work sync                       # Safe sync all repositories with ff-only`,
 	Aliases: []string{"w"},
 }
 
@@ -31,15 +24,7 @@ Examples:
 func init() {
 	rootCmd.AddCommand(workCmd)
 
-	// Add original commands directly to work group to preserve subcommands and functionality
+	// Add core safe workflow commands
 	workCmd.AddCommand(statusCmd)
 	workCmd.AddCommand(syncCmd)
-	workCmd.AddCommand(batch.NewCommitCmd())
-	workCmd.AddCommand(batch.NewPushCmd())
-	workCmd.AddCommand(batch.NewPullCmd())
-	workCmd.AddCommand(batch.NewStashCmd())
-
-	// Add branch and diff as subcommands (they're already defined)
-	workCmd.AddCommand(branchCmd)
-	workCmd.AddCommand(diffCmd)
 }

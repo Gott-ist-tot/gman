@@ -51,9 +51,11 @@ func (h *ErrorHandler) handleGmanError(err *GmanError) {
 		fmt.Fprintln(os.Stderr, compactFormatter.Format(err))
 		
 		// Show suggestions for critical errors
-		if err.IsCritical() && len(err.Suggestions) > 0 {
+		if IsCritical(err) && len(err.Suggestions) > 0 {
 			fmt.Fprintln(os.Stderr)
-			fmt.Fprintln(os.Stderr, h.formatter.formatSuggestions(err.Suggestions))
+			for i, suggestion := range err.Suggestions {
+				fmt.Fprintf(os.Stderr, "  %d. %s\n", i+1, suggestion)
+			}
 		}
 	}
 }
@@ -67,25 +69,18 @@ func (h *ErrorHandler) handleStandardError(err error) {
 	}
 }
 
-// ExitCode returns the appropriate exit code for an error
+// ExitCode returns the appropriate exit code for an error (simplified)
 func (h *ErrorHandler) ExitCode(err error) int {
 	if err == nil {
 		return 0
 	}
 
 	if gErr, ok := As(err); ok {
-		switch gErr.Severity {
-		case SeverityCritical:
+		// Simplified - critical errors return 2, others return 1
+		if IsCritical(gErr) {
 			return 2
-		case SeverityError:
-			return 1
-		case SeverityWarning:
-			return 0 // Warnings don't cause exit failure
-		case SeverityInfo:
-			return 0
-		default:
-			return 1
 		}
+		return 1
 	}
 
 	return 1 // Standard errors return 1

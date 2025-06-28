@@ -659,62 +659,91 @@ func (a *App) performFileSearch(ctx context.Context, query string, repos map[str
 	a.sendSearchComplete(models.SearchFiles, query, results)
 }
 
-// performCommitSearch performs commit search - temporarily disabled during refactoring
+// performCommitSearch performs commit search using real-time git log approach
 func (a *App) performCommitSearch(ctx context.Context, query string, repos map[string]string) {
-	// TODO: Update TUI commit search to use new real-time git log approach
-	// For now, disable commit search in TUI until we can update it properly
-	a.sendSearchError(models.SearchCommits, query, fmt.Errorf("commit search temporarily disabled during refactoring - use 'gman tools find commit' instead"))
-	return
+	a.sendSearchProgress(models.SearchCommits, query, 20, "Initializing commit search...", nil)
 	
-	// Placeholder for future implementation using git log --grep approach
-	/*
-	a.sendSearchProgress(models.SearchCommits, query, 30, "Searching commits...", nil)
+	// Check for cancellation
+	if ctx.Err() != nil {
+		a.sendSearchCancelled(models.SearchCommits, query)
+		return
+	}
+
+	// Collect commits from all repositories using git log (same approach as CLI)
+	var results []models.SearchResultItem
+	repoCount := 0
+	totalRepos := len(repos)
+
+	for alias, path := range repos {
+		// Update progress
+		progress := 20 + (repoCount*60)/totalRepos
+		a.sendSearchProgress(models.SearchCommits, query, progress, fmt.Sprintf("Searching commits in %s...", alias), nil)
+		
+		// Check for cancellation between repositories
+		if ctx.Err() != nil {
+			a.sendSearchCancelled(models.SearchCommits, query)
+			return
+		}
+
+		// Build git log command - same as CLI implementation
+		gitArgs := []string{"log", "--oneline", "--all", "--decorate", "--color=always", "-n", "100"}
+		if query != "" {
+			gitArgs = append(gitArgs, fmt.Sprintf("--grep=%s", query))
+		}
+
+		// Execute git log
+		gitCmd := exec.Command("git", gitArgs...)
+		gitCmd.Dir = path
+		output, err := gitCmd.Output()
+		if err != nil {
+			// Skip repositories that don't have commits or have errors (same as CLI)
+			repoCount++
+			continue
+		}
+
+		if len(output) > 0 {
+			lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+			for _, line := range lines {
+				if line != "" {
+					// Parse commit hash from git log output
+					parts := strings.Fields(line)
+					var hash string
+					if len(parts) > 0 {
+						// Remove ANSI color codes to get clean hash
+						hash = strings.Fields(strings.ReplaceAll(parts[0], "\x1b[m", ""))[0]
+					}
+
+					// Create search result item
+					result := models.SearchResultItem{
+						Type:        "commit",
+						Repository:  alias,
+						Path:        path,
+						Hash:        hash,
+						DisplayText: fmt.Sprintf("[%s] %s", alias, line),
+						PreviewData: map[string]string{
+							"hash":       hash,
+							"repository": alias,
+							"path":       path,
+						},
+					}
+					results = append(results, result)
+				}
+			}
+		}
+		repoCount++
+	}
+
+	// Final progress update
+	a.sendSearchProgress(models.SearchCommits, query, 90, "Processing commit results...", nil)
 	
-	// Perform commit search using new git log approach
-	searchResults, err := a.searchWithProgress(ctx, func() ([]SearchResult, error) {
-		// Implement git log --grep based search here
-		return nil, fmt.Errorf("not implemented yet")
-	}, models.SearchCommits, query)
-	*/
-	
-	/* Old implementation - commented out during refactoring
 	// Check for cancellation after search
 	if ctx.Err() != nil {
 		a.sendSearchCancelled(models.SearchCommits, query)
 		return
 	}
 
-	if err != nil {
-		a.sendSearchError(models.SearchCommits, query, fmt.Errorf("commit search failed: %w", err))
-		return
-	}
-	*/
-
-	/* Old implementation - commented out during refactoring
-	// Convert results
-	a.sendSearchProgress(models.SearchCommits, query, 90, "Processing commit results...", nil)
-	
-	results := make([]models.SearchResultItem, len(searchResults))
-	for i, result := range searchResults {
-		// Check for cancellation during conversion
-		if ctx.Err() != nil {
-			a.sendSearchCancelled(models.SearchCommits, query)
-			return
-		}
-		
-		results[i] = models.SearchResultItem{
-			Type:        result.Type,
-			Repository:  result.RepoAlias,
-			Path:        result.Path,
-			Hash:        result.Hash,
-			DisplayText: result.DisplayText,
-			PreviewData: result.Data,
-		}
-	}
-
 	// Send final results
 	a.sendSearchComplete(models.SearchCommits, query, results)
-	*/
 }
 
 // searchWithProgress wraps search operations with progress updates - temporarily disabled

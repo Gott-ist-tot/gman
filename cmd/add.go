@@ -12,68 +12,56 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var addPath string
+
 // addCmd represents the add command
 var addCmd = &cobra.Command{
-	Use:   "add [path] [alias]",
+	Use:   "add <alias>",
 	Short: "Add a repository to gman configuration",
 	Long: `Add a Git repository to gman configuration.
 
 Usage:
-  gman add                    # Add current directory with auto-generated alias
-  gman add <path>             # Add specified path with auto-generated alias  
-  gman add <path> <alias>     # Add path with custom alias
-  gman add . <alias>          # Add current directory with custom alias
+  gman repo add <alias>                    # Add current directory with specified alias
+  gman repo add <alias> --path <path>      # Add specified path with alias
 
-The path must be a valid Git repository (contain .git directory).`,
-	Args: cobra.RangeArgs(0, 2),
+The path must be a valid Git repository (contain .git directory).
+If no path is specified, the current directory will be used.`,
+	Args: cobra.ExactArgs(1),
 	RunE: runAdd,
 }
 
 func init() {
 	// Command is now available via: gman repo add
 	// Removed direct rootCmd registration to avoid duplication
+	addCmd.Flags().StringVar(&addPath, "path", "", "Path to the Git repository (default: current directory)")
 }
 
 func runAdd(cmd *cobra.Command, args []string) error {
-	var path, alias string
+	var path string
 
-	// Parse arguments
-	switch len(args) {
-	case 0:
-		// Use current directory
+	// Get alias from argument
+	alias := args[0]
+
+	// Determine path
+	if addPath != "" {
+		path = addPath
+		if path == "." {
+			var err error
+			path, err = os.Getwd()
+			if err != nil {
+				return errors.Wrap(err, errors.ErrTypeInternal, 
+					"failed to get current directory").
+					WithSuggestion("Ensure you have read permissions for the current directory")
+			}
+		}
+	} else {
+		// Use current directory if no path specified
 		var err error
 		path, err = os.Getwd()
 		if err != nil {
 			return errors.Wrap(err, errors.ErrTypeInternal, 
 				"failed to get current directory").
 				WithSuggestion("Ensure you have read permissions for the current directory")
-		}
-		alias = generateAlias(path)
-	case 1:
-		// Use specified path, generate alias
-		path = args[0]
-		if path == "." {
-			var err error
-			path, err = os.Getwd()
-			if err != nil {
-				return errors.Wrap(err, errors.ErrTypeInternal, 
-					"failed to get current directory").
-					WithSuggestion("Ensure you have read permissions for the current directory")
-			}
-		}
-		alias = generateAlias(path)
-	case 2:
-		// Use specified path and alias
-		path = args[0]
-		alias = args[1]
-		if path == "." {
-			var err error
-			path, err = os.Getwd()
-			if err != nil {
-				return errors.Wrap(err, errors.ErrTypeInternal, 
-					"failed to get current directory").
-					WithSuggestion("Ensure you have read permissions for the current directory")
-			}
 		}
 	}
 

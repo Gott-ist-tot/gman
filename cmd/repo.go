@@ -14,7 +14,6 @@ This command group includes:
 - add/remove repositories
 - list and view repository information
 - organize repositories into groups
-- view recent activity
 
 Examples:
   gman repo add myproject /path/to/project     # Add a repository
@@ -32,7 +31,6 @@ func init() {
 	repoCmd.AddCommand(addCmd)    // from cmd/add.go
 	repoCmd.AddCommand(removeCmd) // from cmd/remove.go (includes ValidArgsFunction for alias completion)
 	repoCmd.AddCommand(listCmd)   // from cmd/list.go
-	repoCmd.AddCommand(recentCmd) // from cmd/recent.go (includes --limit flag)
 	repoCmd.AddCommand(groupCmd)  // from cmd/group.go
 
 	// No need for copyCommandFlags as we're using original commands with their flags intact

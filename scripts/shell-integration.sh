@@ -7,6 +7,9 @@
 # - Shell completion for gman commands
 # - Optional dependency checking and installation guidance
 
+# Set environment variable to indicate shell integration is active
+export GMAN_SHELL_INTEGRATION=1
+
 # Main gman wrapper function with smart command detection
 gman() {
     # Check if the first argument is 'switch' or its aliases

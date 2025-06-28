@@ -2,6 +2,7 @@ package errors
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -12,16 +13,18 @@ func TestGmanError_Basic(t *testing.T) {
 		t.Errorf("Expected error type %s, got %s", ErrTypeRepoNotFound, err.Type)
 	}
 	
-	if err.Severity != SeverityCritical {
-		t.Errorf("Expected severity %s, got %s", SeverityCritical, err.Severity)
+	// Severity field removed in simplified version
+	if !IsCritical(err) {
+		t.Error("Expected repo not found error to be critical")
 	}
 	
 	if len(err.Suggestions) == 0 {
 		t.Error("Expected suggestions to be provided")
 	}
 	
-	if err.Context["path"] != "/nonexistent/path" {
-		t.Error("Expected path context to be set")
+	// Context field removed in simplified version - path is in the message
+	if !strings.Contains(err.Message, "/nonexistent/path") {
+		t.Error("Expected path to be in error message")
 	}
 }
 
@@ -50,41 +53,40 @@ func TestGmanError_Suggestions(t *testing.T) {
 }
 
 func TestGmanError_Context(t *testing.T) {
+	// Context functionality removed in simplified version
+	// This test is now a placeholder to maintain test structure
 	err := NewGmanError(ErrTypeCommandFailed, "test error")
 	
-	err.WithContext("key1", "value1")
-	err.WithContextMap(map[string]string{
-		"key2": "value2",
-		"key3": "value3",
-	})
-	
-	if len(err.Context) != 3 {
-		t.Errorf("Expected 3 context entries, got %d", len(err.Context))
+	if err.Type != ErrTypeCommandFailed {
+		t.Error("Expected error type to be preserved")
 	}
 	
-	if err.Context["key1"] != "value1" {
-		t.Error("Expected key1 context to be set")
+	if err.Message != "test error" {
+		t.Error("Expected error message to be preserved")
 	}
 }
 
 func TestErrorFormatting(t *testing.T) {
 	err := NewRepoNotFoundError("/test/path")
 	
-	// Test simple formatting
-	simple := FormatSimple(err)
-	if simple == "" {
-		t.Error("Expected non-empty simple format")
+	// Test formatting with simplified formatter
+	formatter := NewErrorFormatter()
+	
+	// Test compact formatting
+	compact := formatter.WithCompact(true).Format(err)
+	if compact == "" {
+		t.Error("Expected non-empty compact format")
 	}
 	
 	// Test detailed formatting
-	detailed := FormatDetailed(err)
+	detailed := formatter.WithCompact(false).Format(err)
 	if detailed == "" {
 		t.Error("Expected non-empty detailed format")
 	}
 	
-	// Simple format should be shorter than detailed
-	if len(simple) >= len(detailed) {
-		t.Error("Expected simple format to be shorter than detailed")
+	// Compact format should be shorter than detailed
+	if len(compact) >= len(detailed) {
+		t.Error("Expected compact format to be shorter than detailed")
 	}
 }
 

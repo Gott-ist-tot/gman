@@ -69,14 +69,12 @@ func (s Severity) String() string {
 }
 
 // GmanError represents a structured error in the gman system
+// Simplified for CLI tool usage - focused on essential information
 type GmanError struct {
-	Type        ErrorType         `json:"type"`
-	Message     string            `json:"message"`
-	Cause       error             `json:"cause,omitempty"`
-	Severity    Severity          `json:"severity"`
-	Suggestions []string          `json:"suggestions,omitempty"`
-	Context     map[string]string `json:"context,omitempty"`
-	Code        string            `json:"code,omitempty"`
+	Type        ErrorType `json:"type"`
+	Message     string    `json:"message"`
+	Cause       error     `json:"cause,omitempty"`
+	Suggestions []string  `json:"suggestions,omitempty"`
 }
 
 // Error implements the error interface
@@ -118,23 +116,15 @@ func (e *GmanError) WithSuggestions(suggestions ...string) *GmanError {
 	return e
 }
 
-// WithContext adds context information to the error
+// WithContext adds context information to the error (deprecated - suggestions preferred)
 func (e *GmanError) WithContext(key, value string) *GmanError {
-	if e.Context == nil {
-		e.Context = make(map[string]string)
-	}
-	e.Context[key] = value
+	// No-op for backwards compatibility - context is simplified away
 	return e
 }
 
-// WithContextMap adds multiple context entries to the error
+// WithContextMap adds multiple context entries to the error (deprecated - suggestions preferred)  
 func (e *GmanError) WithContextMap(context map[string]string) *GmanError {
-	if e.Context == nil {
-		e.Context = make(map[string]string)
-	}
-	for k, v := range context {
-		e.Context[k] = v
-	}
+	// No-op for backwards compatibility - context is simplified away
 	return e
 }
 
@@ -152,23 +142,10 @@ func (e *GmanError) GetSuggestions() string {
 	return result.String()
 }
 
-// GetContext returns formatted context information for display
+// GetContext returns formatted context information for display (deprecated)
 func (e *GmanError) GetContext() string {
-	if len(e.Context) == 0 {
-		return ""
-	}
-	
-	var result strings.Builder
-	result.WriteString("Context:\n")
-	for key, value := range e.Context {
-		result.WriteString(fmt.Sprintf("  %s: %s\n", key, value))
-	}
-	return result.String()
-}
-
-// IsCritical returns true if the error is critical
-func (e *GmanError) IsCritical() bool {
-	return e.Severity == SeverityCritical
+	// Context removed in simplification - return empty string
+	return ""
 }
 
 // IsRecoverable returns true if the error might be recoverable

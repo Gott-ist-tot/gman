@@ -3,6 +3,7 @@ package panels
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -259,9 +260,22 @@ func (s *SearchPanel) updatePreview() tea.Cmd {
 			contentType = models.PreviewFile
 
 		case "commit":
-			// Show commit information
-			content = fmt.Sprintf("Commit: %s\nRepository: %s\n\n%s",
-				result.Hash, result.Repository, result.DisplayText)
+			// Show detailed commit information using git show
+			if result.Hash != "" && result.Path != "" {
+				// Execute git show to get commit details
+				gitCmd := exec.Command("git", "show", "--color=always", result.Hash)
+				gitCmd.Dir = result.Path
+				output, err := gitCmd.Output()
+				if err == nil {
+					content = string(output)
+				} else {
+					content = fmt.Sprintf("Commit: %s\nRepository: %s\nError: %v\n\n%s",
+						result.Hash, result.Repository, err, result.DisplayText)
+				}
+			} else {
+				content = fmt.Sprintf("Commit: %s\nRepository: %s\n\n%s",
+					result.Hash, result.Repository, result.DisplayText)
+			}
 			contentType = models.PreviewCommit
 
 		default:

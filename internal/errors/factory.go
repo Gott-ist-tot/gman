@@ -4,12 +4,9 @@ import "fmt"
 
 // NewGmanError creates a new GmanError with the specified type and message
 func NewGmanError(errorType ErrorType, message string) *GmanError {
-	severity := getDefaultSeverity(errorType)
 	return &GmanError{
-		Type:     errorType,
-		Message:  message,
-		Severity: severity,
-		Context:  make(map[string]string),
+		Type:    errorType,
+		Message: message,
 	}
 }
 
@@ -22,8 +19,7 @@ func NewRepoNotFoundError(path string) *GmanError {
 			"Check if the path exists and is accessible",
 			"Verify the repository path in your configuration",
 			"Use 'gman repo list' to see configured repositories",
-		).
-		WithContext("path", path)
+		)
 }
 
 // NewNotGitRepoError creates an error for when a directory is not a git repository
@@ -33,8 +29,7 @@ func NewNotGitRepoError(path string) *GmanError {
 			"Initialize a Git repository with 'git init'",
 			"Clone an existing repository",
 			"Check if .git directory exists",
-		).
-		WithContext("path", path)
+		)
 }
 
 // NewRepoAlreadyExistsError creates an error for when a repository alias already exists
@@ -44,8 +39,7 @@ func NewRepoAlreadyExistsError(alias string) *GmanError {
 			"Use a different alias name",
 			"Remove the existing repository first with 'gman repo remove "+alias+"'",
 			"Use 'gman repo list' to see existing repositories",
-		).
-		WithContext("alias", alias)
+		)
 }
 
 // Git operation error factories
@@ -58,8 +52,7 @@ func NewMergeConflictError(repoPath string) *GmanError {
 			"Use 'git status' to see conflicted files",
 			"Run 'git add <file>' after resolving conflicts",
 			"Complete merge with 'git commit'",
-		).
-		WithContext("repository", repoPath)
+		)
 }
 
 // NewRemoteUnreachableError creates an error for unreachable remotes
@@ -70,9 +63,7 @@ func NewRemoteUnreachableError(remote string, repoPath string) *GmanError {
 			"Verify remote URL with 'git remote -v'",
 			"Check if you have access to the remote repository",
 			"Try again later if it's a temporary network issue",
-		).
-		WithContext("remote", remote).
-		WithContext("repository", repoPath)
+		)
 }
 
 // NewWorkspaceNotCleanError creates an error for uncommitted changes
@@ -83,8 +74,7 @@ func NewWorkspaceNotCleanError(repoPath string) *GmanError {
 			"Stash changes with 'git stash'",
 			"Discard changes with 'git checkout -- .' (warning: destructive)",
 			"Use 'git status' to see what needs to be committed",
-		).
-		WithContext("repository", repoPath)
+		)
 }
 
 // NewBranchNotFoundError creates an error for non-existent branches
@@ -94,9 +84,7 @@ func NewBranchNotFoundError(branch string, repoPath string) *GmanError {
 			"Check available branches with 'git branch -a'",
 			"Create the branch with 'git checkout -b "+branch+"'",
 			"Switch to an existing branch",
-		).
-		WithContext("branch", branch).
-		WithContext("repository", repoPath)
+		)
 }
 
 // NewWorktreeExistsError creates an error for existing worktrees
@@ -106,8 +94,7 @@ func NewWorktreeExistsError(path string) *GmanError {
 			"Use a different path for the worktree",
 			"Remove existing worktree with 'git worktree remove "+path+"'",
 			"List existing worktrees with 'git worktree list'",
-		).
-		WithContext("path", path)
+		)
 }
 
 // Configuration error factories
@@ -119,8 +106,7 @@ func NewConfigInvalidError(reason string) *GmanError {
 			"Check YAML syntax in configuration file",
 			"Restore from backup if available",
 			"Reset configuration with 'gman setup'",
-		).
-		WithContext("reason", reason)
+		)
 }
 
 // NewConfigNotFoundError creates an error for missing configuration
@@ -130,8 +116,7 @@ func NewConfigNotFoundError(path string) *GmanError {
 			"Run 'gman setup' to create initial configuration",
 			"Check if the configuration directory exists",
 			"Verify file permissions",
-		).
-		WithContext("path", path)
+		)
 }
 
 // NewPermissionDeniedError creates an error for permission issues
@@ -141,16 +126,14 @@ func NewPermissionDeniedError(resource string) *GmanError {
 			"Check file/directory permissions",
 			"Run with appropriate user privileges",
 			"Verify ownership of files and directories",
-		).
-		WithContext("resource", resource)
+		)
 }
 
 // External tool error factories
 
 // NewToolNotAvailableError creates an error for missing tools
 func NewToolNotAvailableError(tool string, installInstructions string) *GmanError {
-	err := NewGmanError(ErrTypeToolNotAvailable, fmt.Sprintf("Required tool '%s' is not available", tool)).
-		WithContext("tool", tool)
+	err := NewGmanError(ErrTypeToolNotAvailable, fmt.Sprintf("Required tool '%s' is not available", tool))
 		
 	if installInstructions != "" {
 		err.WithSuggestion("Install with: " + installInstructions)
@@ -175,10 +158,7 @@ func NewCommandFailedError(command string, exitCode int, output string) *GmanErr
 			"Check command syntax and arguments",
 			"Verify required permissions",
 			"Review error output for specific issues",
-		).
-		WithContext("command", command).
-		WithContext("exit_code", fmt.Sprintf("%d", exitCode)).
-		WithContext("output", output)
+		)
 }
 
 // Network error factories
@@ -190,9 +170,7 @@ func NewNetworkTimeoutError(operation string, timeout string) *GmanError {
 			"Check your internet connection",
 			"Try again with a longer timeout",
 			"Verify the remote server is responding",
-		).
-		WithContext("operation", operation).
-		WithContext("timeout", timeout)
+		)
 }
 
 // NewConnectFailedError creates an error for connection failures
@@ -202,9 +180,7 @@ func NewConnectFailedError(target string, reason string) *GmanError {
 			"Check network connectivity",
 			"Verify the target address is correct",
 			"Check firewall and proxy settings",
-		).
-		WithContext("target", target).
-		WithContext("reason", reason)
+		)
 }
 
 // User input error factories
@@ -215,15 +191,12 @@ func NewInvalidInputError(input string, reason string) *GmanError {
 		WithSuggestions(
 			"Check the input format and try again",
 			"Use --help to see valid options",
-		).
-		WithContext("input", input).
-		WithContext("reason", reason)
+		)
 }
 
 // NewOperationCancelledError creates an error for cancelled operations
 func NewOperationCancelledError(operation string) *GmanError {
-	return NewGmanError(ErrTypeOperationCancelled, fmt.Sprintf("Operation cancelled: %s", operation)).
-		WithContext("operation", operation)
+	return NewGmanError(ErrTypeOperationCancelled, fmt.Sprintf("Operation cancelled: %s", operation))
 }
 
 // Internal error factories
@@ -235,9 +208,7 @@ func NewInternalError(component string, reason string) *GmanError {
 			"This is likely a bug - please report it",
 			"Try restarting the operation",
 			"Check for software updates",
-		).
-		WithContext("component", component).
-		WithContext("reason", reason)
+		)
 }
 
 // NewNotImplementedError creates an error for unimplemented features
@@ -246,22 +217,6 @@ func NewNotImplementedError(feature string) *GmanError {
 		WithSuggestions(
 			"This feature is planned for a future release",
 			"Check documentation for alternative approaches",
-		).
-		WithContext("feature", feature)
+		)
 }
 
-// getDefaultSeverity returns the default severity for an error type
-func getDefaultSeverity(errorType ErrorType) Severity {
-	switch errorType {
-	case ErrTypeConfigNotFound, ErrTypeRepoNotFound:
-		return SeverityCritical
-	case ErrTypeMergeConflict, ErrTypeWorkspaceNotClean, ErrTypePermissionDenied:
-		return SeverityError
-	case ErrTypeToolNotAvailable, ErrTypeRemoteUnreachable, ErrTypeNetworkTimeout:
-		return SeverityWarning
-	case ErrTypeOperationCancelled:
-		return SeverityInfo
-	default:
-		return SeverityError
-	}
-}

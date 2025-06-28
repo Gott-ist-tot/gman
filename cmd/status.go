@@ -10,8 +10,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var extendedStatus bool
-var superExtendedStatus bool
+var verboseStatus bool
 
 // statusCmd represents the status command
 var statusCmd = &cobra.Command{
@@ -23,16 +22,15 @@ var statusCmd = &cobra.Command{
 - Sync status with remote (ahead/behind/up-to-date)
 - Last commit information
 
-Use --extended to see additional information like file change counts and commit times.
-Use --super to see all enhanced information including remote URLs, stash counts, and branch statistics.`,
+Use --verbose to see detailed information including file change counts, commit times,
+remote URLs, stash counts, and branch statistics.`,
 	RunE: runStatus,
 }
 
 func init() {
 	// Command is now available via: gman work status
 	// Removed direct rootCmd registration to avoid duplication
-	statusCmd.Flags().BoolVarP(&extendedStatus, "extended", "e", false, "Show extended information (file changes, commit times)")
-	statusCmd.Flags().BoolVarP(&superExtendedStatus, "super", "s", false, "Show all enhanced information (remote URLs, stash counts, branch statistics)")
+	statusCmd.Flags().BoolVarP(&verboseStatus, "verbose", "v", false, "Show detailed information (file changes, commit times, remote URLs, stash counts)")
 }
 
 func runStatus(cmd *cobra.Command, args []string) error {
@@ -62,10 +60,8 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 	// Display results
 	var displayer *display.StatusDisplayer
-	if superExtendedStatus {
+	if verboseStatus {
 		displayer = display.NewSuperExtendedStatusDisplayer(cfg.Settings.ShowLastCommit)
-	} else if extendedStatus {
-		displayer = display.NewExtendedStatusDisplayer(cfg.Settings.ShowLastCommit)
 	} else {
 		displayer = display.NewStatusDisplayer(cfg.Settings.ShowLastCommit)
 	}
