@@ -162,18 +162,38 @@ func (fs *FDSearcher) searchInRepository(ctx context.Context, alias, repoPath, p
 }
 
 // FormatForFZF formats file results for fzf input
+// Format: "absolute_path:0:display_text" (line number 0 for files, consistent with content search)
 func (fs *FDSearcher) FormatForFZF(results []FileResult) string {
 	var lines []string
 	for _, result := range results {
-		lines = append(lines, result.DisplayText)
+		// Format: absolute_path:0:display_text
+		// Using 0 as line number for files (consistent with content search format)
+		line := fmt.Sprintf("%s:0:%s", result.FullPath, result.DisplayText)
+		lines = append(lines, line)
 	}
 	return strings.Join(lines, "\n")
 }
 
 // ParseFZFSelection parses fzf selection and returns the corresponding file result
 func (fs *FDSearcher) ParseFZFSelection(selection string, results []FileResult) (*FileResult, error) {
+	// New format is: "absolute_path:0:display_text"
+	// We need to extract the display_text part and match it
+	parts := strings.SplitN(selection, ":", 3)
+	if len(parts) < 3 {
+		// Fallback: try to match the entire selection as display text
+		for _, result := range results {
+			if result.DisplayText == selection {
+				return &result, nil
+			}
+		}
+		return nil, fmt.Errorf("selection not found in results")
+	}
+
+	// Extract display text (everything after the second colon)
+	displayText := parts[2]
+	
 	for _, result := range results {
-		if result.DisplayText == selection {
+		if result.DisplayText == displayText {
 			return &result, nil
 		}
 	}

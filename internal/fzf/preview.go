@@ -208,17 +208,20 @@ func shellEscape(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
 }
 
-// BuildFilePreviewCommand builds a complete preview command for file searching
+// BuildFilePreviewCommand builds a complete preview command for file searching using secure internal command
 func (pg *PreviewGenerator) BuildFilePreviewCommand(repoMap map[string]string) string {
-	// This creates a more sophisticated preview that can resolve repository paths
+	// Use secure internal preview command instead of shell scripts
+	// The input format should be: "repo-alias:relative/path" or "absolute/path"
 	script := fmt.Sprintf(`
 #!/bin/bash
 line="$1"
+
+# Try to parse as "repo-alias:relative/path" format
 if [[ "$line" =~ ^([^:]+):[[:space:]]*(.+)$ ]]; then
     repo_alias="${BASH_REMATCH[1]}"
     rel_path="${BASH_REMATCH[2]}"
     
-    # Repository path mapping (this would be generated dynamically)
+    # Repository path mapping
     case "$repo_alias" in
 %s
         *)
@@ -228,52 +231,16 @@ if [[ "$line" =~ ^([^:]+):[[:space:]]*(.+)$ ]]; then
     esac
     
     abs_path="$repo_path/$rel_path"
-    
-    echo "Repository: $repo_alias"
-    echo "File: $rel_path"
-    echo "Path: $abs_path"
-    echo "----------------------------------------"
-    
-    if [[ -f "$abs_path" ]]; then
-        # Check file size
-        size=$(stat -f%%z "$abs_path" 2>/dev/null || stat -c%%s "$abs_path" 2>/dev/null || echo 0)
-        if [[ $size -gt 1048576 ]]; then
-            echo "File too large to preview ($size bytes)"
-            exit 0
-        fi
-        
-        # Preview based on file type
-        case "$rel_path" in
-            *.jpg|*.jpeg|*.png|*.gif|*.bmp)
-                if command -v chafa >/dev/null 2>&1; then
-                    chafa --size=60x40 "$abs_path" 2>/dev/null
-                else
-                    echo "Image file: $rel_path"
-                    file "$abs_path" 2>/dev/null
-                fi
-                ;;
-            *.pdf)
-                if command -v pdftotext >/dev/null 2>&1; then
-                    pdftotext -l 5 -nopgbrk -q "$abs_path" - 2>/dev/null
-                else
-                    echo "PDF file: $rel_path"
-                    file "$abs_path" 2>/dev/null
-                fi
-                ;;
-            *)
-                if command -v bat >/dev/null 2>&1; then
-                    bat --style=numbers --color=always --line-range :100 "$abs_path"
-                else
-                    head -100 "$abs_path" 2>/dev/null
-                fi
-                ;;
-        esac
-    else
-        echo "File not found: $abs_path"
-    fi
 else
-    echo "Invalid format: $line"
+    # Treat as absolute path
+    abs_path="$line"
 fi
+
+# Create secure preview request
+request=$(echo '{"type":"file","path":"'"$abs_path"'","repo_path":"","line_number":0,"commit_hash":""}' | base64 -w 0)
+
+# Call secure internal preview command
+gman internal-preview "$request"
 `, pg.generateRepoMapping(repoMap))
 
 	scriptFile, _, err := CreateTempPreviewScript(script)
@@ -294,7 +261,7 @@ func (pg *PreviewGenerator) generateRepoMapping(repoMap map[string]string) strin
 	return strings.Join(cases, "\n")
 }
 
-// BuildCommitPreviewCommand builds a complete preview command for commit searching
+// BuildCommitPreviewCommand builds a complete preview command for commit searching using secure internal command
 func (pg *PreviewGenerator) BuildCommitPreviewCommand(repoMap map[string]string) string {
 	script := fmt.Sprintf(`
 #!/bin/bash
@@ -312,12 +279,11 @@ if [[ "$line" =~ ^([^:]+):[[:space:]]*([a-f0-9]+)[[:space:]]+(.+)$ ]]; then
             ;;
     esac
     
-    echo "Repository: $repo_alias"
-    echo "Commit: $commit_hash"
-    echo "----------------------------------------"
+    # Create secure preview request for commit
+    request=$(echo '{"type":"commit","path":"","repo_path":"'"$repo_path"'","line_number":0,"commit_hash":"'"$commit_hash"'"}' | base64 -w 0)
     
-    # Show commit details
-    git -C "$repo_path" show --color=always --stat "$commit_hash" 2>/dev/null || echo "Cannot show commit details"
+    # Call secure internal preview command
+    gman internal-preview "$request"
 else
     echo "Invalid format: $line"
 fi

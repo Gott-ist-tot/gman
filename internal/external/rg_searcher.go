@@ -18,6 +18,7 @@ import (
 type ContentResult struct {
 	RepoAlias    string
 	FilePath     string
+	FullPath     string // Absolute path to the file
 	LineNumber   int
 	LineContent  string
 	MatchColumn  int
@@ -191,12 +192,19 @@ func (rs *RGSearcher) parseRGLine(alias, repoPath, line string) (*ContentResult,
 		relPath = filePath
 	}
 
+	// Store the absolute path (filePath is already absolute from rg output)
+	fullPath := filePath
+	if !filepath.IsAbs(fullPath) {
+		fullPath = filepath.Join(repoPath, filePath)
+	}
+
 	// Create display text: "alias:path:line: content"
 	displayText := fmt.Sprintf("%s:%s:%d: %s", alias, relPath, lineNum, strings.TrimSpace(content))
 
 	return &ContentResult{
 		RepoAlias:   alias,
 		FilePath:    relPath,
+		FullPath:    fullPath,
 		LineNumber:  lineNum,
 		LineContent: content,
 		MatchColumn: column,
@@ -205,18 +213,38 @@ func (rs *RGSearcher) parseRGLine(alias, repoPath, line string) (*ContentResult,
 }
 
 // FormatForFZF formats content results for fzf input
+// Format: "absolute_path:line_number:display_text"
 func (rs *RGSearcher) FormatForFZF(results []ContentResult) string {
 	var lines []string
 	for _, result := range results {
-		lines = append(lines, result.DisplayText)
+		// Format: absolute_path:line_number:display_text
+		// This allows fzf key bindings to extract the path and line number easily
+		line := fmt.Sprintf("%s:%d:%s", result.FullPath, result.LineNumber, result.DisplayText)
+		lines = append(lines, line)
 	}
 	return strings.Join(lines, "\n")
 }
 
 // ParseFZFSelection parses fzf selection and returns the corresponding content result
 func (rs *RGSearcher) ParseFZFSelection(selection string, results []ContentResult) (*ContentResult, error) {
+	// New format is: "absolute_path:line_number:display_text"
+	// We need to extract the display_text part and match it
+	parts := strings.SplitN(selection, ":", 3)
+	if len(parts) < 3 {
+		// Fallback: try to match the entire selection as display text
+		for _, result := range results {
+			if result.DisplayText == selection {
+				return &result, nil
+			}
+		}
+		return nil, fmt.Errorf("selection not found in results")
+	}
+
+	// Extract display text (everything after the second colon)
+	displayText := parts[2]
+	
 	for _, result := range results {
-		if result.DisplayText == selection {
+		if result.DisplayText == displayText {
 			return &result, nil
 		}
 	}

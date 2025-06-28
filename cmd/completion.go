@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"bytes"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -52,7 +54,15 @@ PowerShell:
 		case "bash":
 			cmd.Root().GenBashCompletion(os.Stdout)
 		case "zsh":
-			cmd.Root().GenZshCompletion(os.Stdout)
+			// Handle zsh completion with cleaning to remove "-- 4" artifact
+			var buf bytes.Buffer
+			cmd.Root().GenZshCompletion(&buf)
+			
+			// Clean the output by removing the "-- 4" directive output
+			cleanedOutput := strings.ReplaceAll(buf.String(), " -- 4", "")
+			cleanedOutput = strings.ReplaceAll(cleanedOutput, "-- 4", "")
+			
+			os.Stdout.WriteString(cleanedOutput)
 		case "fish":
 			cmd.Root().GenFishCompletion(os.Stdout, true)
 		case "powershell":

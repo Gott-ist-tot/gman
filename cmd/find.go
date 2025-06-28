@@ -390,7 +390,9 @@ func runFindContent(cmd *cobra.Command, args []string) error {
 	editorCmd := getEditorCommand()
 	if editorCmd != "" {
 		// Create editor binding that opens the file at the specific line
-		editorBinding := fmt.Sprintf("ctrl-o:execute(%s {1}:{2})", editorCmd)
+		// New format is: "absolute_path:line_number:display_text"
+		// We extract the path (field 1) and line number (field 2) using cut
+		editorBinding := fmt.Sprintf("ctrl-o:execute(%s +$(echo {} | cut -d: -f2) \"$(echo {} | cut -d: -f1)\")", editorCmd)
 		opts.BindKeys = []string{editorBinding}
 	}
 
@@ -413,7 +415,8 @@ func runFindContent(cmd *cobra.Command, args []string) error {
 	}
 
 	// Output the selected file path with line number for easy editor navigation
-	fmt.Printf("%s:%d\n", selectedResult.FilePath, selectedResult.LineNumber)
+	// Use FullPath for absolute path access
+	fmt.Printf("%s:%d\n", selectedResult.FullPath, selectedResult.LineNumber)
 	return nil
 }
 
