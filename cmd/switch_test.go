@@ -229,6 +229,101 @@ func TestSwitchWithWorktrees(t *testing.T) {
 	})
 }
 
+// TestWorktreeAliasCollisionResolution tests the improved worktree alias generation
+func TestWorktreeAliasCollisionResolution(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "gman_worktree_alias_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create two repositories that might have conflicting worktree names
+	repos := map[string]string{
+		"backend":  filepath.Join(tempDir, "backend"),
+		"frontend": filepath.Join(tempDir, "frontend"),
+	}
+
+	mgrs := cmdutils.GetManagers()
+	gitManager := mgrs.Git
+
+	for alias, path := range repos {
+		if err := test.InitBasicTestRepository(t, path); err != nil {
+			t.Fatalf("Failed to initialize %s: %v", alias, err)
+		}
+
+		// Create worktrees with same names but in different repos
+		hotfixPath := filepath.Join(tempDir, fmt.Sprintf("%s-hotfix", alias))
+		if err := gitManager.AddWorktree(path, hotfixPath, "hotfix-branch"); err != nil {
+			t.Fatalf("Failed to create hotfix worktree for %s: %v", alias, err)
+		}
+	}
+
+	// Test the collectSwitchTargets function directly
+	targets, err := collectSwitchTargets(repos)
+	if err != nil {
+		t.Fatalf("Failed to collect switch targets: %v", err)
+	}
+
+	// Verify that worktree aliases are prefixed with repo names
+	var backendHotfixFound, frontendHotfixFound bool
+	worktreeAliases := make(map[string]bool)
+
+	for _, target := range targets {
+		if target.Type == "worktree" {
+			// Check for duplicate aliases
+			if worktreeAliases[target.Alias] {
+				t.Errorf("Duplicate worktree alias found: %s", target.Alias)
+			}
+			worktreeAliases[target.Alias] = true
+
+			// Verify aliases are prefixed with repo names using "/" separator
+			if strings.HasPrefix(target.Alias, "backend/") && strings.Contains(target.Alias, "hotfix") {
+				backendHotfixFound = true
+				if target.RepoAlias != "backend" {
+					t.Errorf("Expected backend worktree to have RepoAlias 'backend', got '%s'", target.RepoAlias)
+				}
+			}
+			if strings.HasPrefix(target.Alias, "frontend/") && strings.Contains(target.Alias, "hotfix") {
+				frontendHotfixFound = true
+				if target.RepoAlias != "frontend" {
+					t.Errorf("Expected frontend worktree to have RepoAlias 'frontend', got '%s'", target.RepoAlias)
+				}
+			}
+
+			// Verify description includes branch and path info for disambiguation
+			if target.Branch != "" && !strings.Contains(target.Description, target.Branch) {
+				t.Errorf("Expected description to include branch '%s', got '%s'", target.Branch, target.Description)
+			}
+			// Verify description includes path for disambiguation
+			if !strings.Contains(target.Description, target.Path) {
+				t.Errorf("Expected description to include path '%s' for disambiguation, got '%s'", target.Path, target.Description)
+			}
+		}
+	}
+
+	if !backendHotfixFound {
+		t.Error("Expected to find backend hotfix worktree with proper alias")
+	}
+	if !frontendHotfixFound {
+		t.Error("Expected to find frontend hotfix worktree with proper alias")
+	}
+
+	// Verify we can distinguish between the two hotfix worktrees using new format
+	expectedAliases := []string{"backend/backend-hotfix", "frontend/frontend-hotfix"}
+	for _, expectedAlias := range expectedAliases {
+		found := false
+		for _, target := range targets {
+			if target.Type == "worktree" && target.Alias == expectedAlias {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected to find worktree with alias '%s'", expectedAlias)
+		}
+	}
+}
+
 // TestSwitchTargetCollection tests the target collection functionality
 func TestSwitchTargetCollection(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "gman_switch_targets_test_*")
@@ -532,72 +627,6 @@ func TestSwitchErrorHandling(t *testing.T) {
 	}
 }
 
-// TestShellIntegrationDetection tests the shell integration detection functionality
-func TestShellIntegrationDetection(t *testing.T) {
-	tests := []struct {
-		name        string
-		envVars     map[string]string
-		expected    bool
-		description string
-	}{
-		{
-			name:        "shell integration active via GMAN_SHELL_INTEGRATION",
-			envVars:     map[string]string{"GMAN_SHELL_INTEGRATION": "1"},
-			expected:    true,
-			description: "Should detect when GMAN_SHELL_INTEGRATION=1",
-		},
-		{
-			name:        "shell integration bypassed via GMAN_SKIP_SHELL_CHECK",
-			envVars:     map[string]string{"GMAN_SKIP_SHELL_CHECK": "1"},
-			expected:    true,
-			description: "Should bypass check when GMAN_SKIP_SHELL_CHECK=1",
-		},
-		{
-			name:        "no shell integration detected",
-			envVars:     map[string]string{},
-			expected:    false,
-			description: "Should return false when no integration detected",
-		},
-		{
-			name: "interactive shell without wrapper",
-			envVars: map[string]string{
-				"PS1":    "$ ",
-				"SHLVL":  "1",
-				"_":      "/usr/bin/gman",
-			},
-			expected:    false,
-			description: "Should return false for interactive shell without wrapper",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Clear existing environment variables
-			os.Unsetenv("GMAN_SHELL_INTEGRATION")
-			os.Unsetenv("GMAN_SKIP_SHELL_CHECK")
-			os.Unsetenv("PS1")
-			os.Unsetenv("SHLVL")
-			os.Unsetenv("_")
-
-			// Set test environment variables
-			for key, value := range tt.envVars {
-				os.Setenv(key, value)
-			}
-
-			// Clean up after test
-			defer func() {
-				for key := range tt.envVars {
-					os.Unsetenv(key)
-				}
-			}()
-
-			result := isShellIntegrationActive()
-			if result != tt.expected {
-				t.Errorf("isShellIntegrationActive() = %v, expected %v (%s)", result, tt.expected, tt.description)
-			}
-		})
-	}
-}
 
 // TestSwitchShellIntegrationWarning tests that the shell integration warning is shown
 func TestSwitchShellIntegrationWarning(t *testing.T) {
@@ -683,6 +712,124 @@ func TestSwitchShellIntegrationWarning(t *testing.T) {
 			t.Error("Expected GMAN_CD output when shell integration is active")
 		}
 	})
+}
+
+// TestShellIntegrationDetection tests the improved shell integration detection
+func TestShellIntegrationDetection(t *testing.T) {
+	// Save original environment
+	originalIntegration := os.Getenv("GMAN_SHELL_INTEGRATION")
+	originalSkipCheck := os.Getenv("GMAN_SKIP_SHELL_CHECK")
+	defer func() {
+		if originalIntegration != "" {
+			os.Setenv("GMAN_SHELL_INTEGRATION", originalIntegration)
+		} else {
+			os.Unsetenv("GMAN_SHELL_INTEGRATION")
+		}
+		if originalSkipCheck != "" {
+			os.Setenv("GMAN_SKIP_SHELL_CHECK", originalSkipCheck)
+		} else {
+			os.Unsetenv("GMAN_SKIP_SHELL_CHECK")
+		}
+	}()
+
+	tests := []struct {
+		name                   string
+		shellIntegrationEnv    string
+		skipCheckEnv           string
+		expectedActive         bool
+		expectedDiagnosticsContain string
+		description            string
+	}{
+		{
+			name:                   "shell integration active",
+			shellIntegrationEnv:    "1",
+			skipCheckEnv:           "",
+			expectedActive:         true,
+			expectedDiagnosticsContain: "GMAN_SHELL_INTEGRATION properly set",
+			description:            "Should detect active shell integration",
+		},
+		{
+			name:                   "shell integration inactive",
+			shellIntegrationEnv:    "",
+			skipCheckEnv:           "",
+			expectedActive:         false,
+			expectedDiagnosticsContain: "GMAN_SHELL_INTEGRATION not set",
+			description:            "Should detect inactive shell integration",
+		},
+		{
+			name:                   "skip check bypass",
+			shellIntegrationEnv:    "",
+			skipCheckEnv:           "1",
+			expectedActive:         true,
+			expectedDiagnosticsContain: "Shell check bypass is active",
+			description:            "Should honor skip check bypass",
+		},
+		{
+			name:                   "shell integration overrides skip",
+			shellIntegrationEnv:    "1",
+			skipCheckEnv:           "1",
+			expectedActive:         true,
+			expectedDiagnosticsContain: "GMAN_SHELL_INTEGRATION properly set",
+			description:            "Shell integration should be primary indicator",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set environment variables
+			if tt.shellIntegrationEnv != "" {
+				os.Setenv("GMAN_SHELL_INTEGRATION", tt.shellIntegrationEnv)
+			} else {
+				os.Unsetenv("GMAN_SHELL_INTEGRATION")
+			}
+			
+			if tt.skipCheckEnv != "" {
+				os.Setenv("GMAN_SKIP_SHELL_CHECK", tt.skipCheckEnv)
+			} else {
+				os.Unsetenv("GMAN_SKIP_SHELL_CHECK")
+			}
+
+			// Test detection
+			isActive := isShellIntegrationActive()
+			if isActive != tt.expectedActive {
+				t.Errorf("Expected isShellIntegrationActive() to return %v, got %v (%s)", 
+					tt.expectedActive, isActive, tt.description)
+			}
+
+			// Test diagnostics
+			diagnostics := getShellIntegrationDiagnostics()
+			if !strings.Contains(diagnostics, tt.expectedDiagnosticsContain) {
+				t.Errorf("Expected diagnostics to contain '%s', got: %s (%s)", 
+					tt.expectedDiagnosticsContain, diagnostics, tt.description)
+			}
+		})
+	}
+}
+
+// TestShellIntegrationDiagnostics tests the diagnostic information quality
+func TestShellIntegrationDiagnostics(t *testing.T) {
+	diagnostics := getShellIntegrationDiagnostics()
+	
+	// Should contain basic diagnostic elements
+	expectedElements := []string{
+		"GMAN_SHELL_INTEGRATION",
+		"Shell:",
+		"config file",
+	}
+	
+	for _, element := range expectedElements {
+		if !strings.Contains(diagnostics, element) {
+			t.Errorf("Expected diagnostics to contain '%s', got: %s", element, diagnostics)
+		}
+	}
+	
+	// Should contain emojis for visual clarity
+	expectedEmojis := []string{"❌", "📝", "💡"}
+	for _, emoji := range expectedEmojis {
+		if !strings.Contains(diagnostics, emoji) {
+			t.Errorf("Expected diagnostics to contain emoji '%s' for visual clarity, got: %s", emoji, diagnostics)
+		}
+	}
 }
 
 // Helper functions for switch command testing

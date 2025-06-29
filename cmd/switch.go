@@ -68,12 +68,20 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 	if !isShellIntegrationActive() {
 		fmt.Println("⚠️  Shell integration not detected!")
 		fmt.Println("")
+		
+		// Show diagnostic information
+		fmt.Println("🔍 Diagnostic Information:")
+		fmt.Println(getShellIntegrationDiagnostics())
+		fmt.Println("")
+		
+		fmt.Println("📋 Quick Fix:")
 		fmt.Println("The 'gman switch' command requires shell integration to change directories.")
-		fmt.Println("To fix this, add the following to your ~/.zshrc or ~/.bashrc:")
+		fmt.Println("Add the following to your shell configuration file:")
 		fmt.Println("")
 		fmt.Println("  # gman shell integration")
 		fmt.Println("  gman() {")
 		fmt.Println("    local output")
+		fmt.Println("    export GMAN_SHELL_INTEGRATION=1")
 		fmt.Println("    output=$(command gman \"$@\" 2>&1)")
 		fmt.Println("    if [[ \"$output\" == GMAN_CD:* ]]; then")
 		fmt.Println("      local target_dir=\"${output#GMAN_CD:}\"")
@@ -89,10 +97,10 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 		fmt.Println("    fi")
 		fmt.Println("  }")
 		fmt.Println("")
-		fmt.Println("Then reload your shell: source ~/.zshrc")
+		fmt.Println("🔄 Then reload your shell or run: source ~/.zshrc")
 		fmt.Println("")
-		fmt.Println("💡 Pro tip: Use 'gman tools init shell' for automated setup!")
-		fmt.Println("For more help, see: gman tools setup")
+		fmt.Println("🚀 Alternative: Use 'gman tools init shell' for automated setup!")
+		fmt.Println("📚 For detailed help: https://docs.anthropic.com/en/docs/claude-code/troubleshooting")
 		return fmt.Errorf("shell integration required")
 	}
 	
@@ -208,18 +216,29 @@ func collectSwitchTargets(repositories map[string]string) ([]types.SwitchTarget,
 				continue
 			}
 
-			// Create a unique alias for the worktree
-			wtAlias := filepath.Base(wt.Path)
-			if wtAlias == "." || wtAlias == "" {
-				wtAlias = fmt.Sprintf("%s-worktree", alias)
+			// Create a descriptive alias for the worktree using repo prefix
+			wtBaseName := filepath.Base(wt.Path)
+			if wtBaseName == "." || wtBaseName == "" {
+				wtBaseName = "worktree"
 			}
+			
+			// Always prefix with repository alias to provide clear context
+			wtAlias := fmt.Sprintf("%s/%s", alias, wtBaseName)
 
-			// Ensure worktree alias is unique
+			// Ensure worktree alias is unique (fallback safety)
 			originalAlias := wtAlias
 			counter := 1
 			for isAliasUsed(wtAlias, targets) {
 				wtAlias = fmt.Sprintf("%s-%d", originalAlias, counter)
 				counter++
+			}
+
+			// Enhanced description with branch, path, and repository context
+			description := fmt.Sprintf("Worktree: %s", wtBaseName)
+			if wt.Branch != "" {
+				description = fmt.Sprintf("Worktree: %s (branch: %s) → %s", wtBaseName, wt.Branch, wt.Path)
+			} else {
+				description = fmt.Sprintf("Worktree: %s → %s", wtBaseName, wt.Path)
 			}
 
 			targets = append(targets, types.SwitchTarget{
@@ -228,7 +247,7 @@ func collectSwitchTargets(repositories map[string]string) ([]types.SwitchTarget,
 				Type:        "worktree",
 				RepoAlias:   alias,
 				Branch:      wt.Branch,
-				Description: fmt.Sprintf("Worktree of %s", alias),
+				Description: description,
 			})
 		}
 	}
@@ -284,42 +303,60 @@ func isAliasUsed(alias string, targets []types.SwitchTarget) bool {
 
 // isShellIntegrationActive detects if gman is running within the shell wrapper function
 func isShellIntegrationActive() bool {
-	// Method 1: Check for GMAN_SHELL_INTEGRATION environment variable
+	// Primary method: Check for GMAN_SHELL_INTEGRATION environment variable
 	// The shell wrapper should set this to indicate it's active
 	if os.Getenv("GMAN_SHELL_INTEGRATION") == "1" {
 		return true
 	}
 	
-	// Method 2: Check if we're being called by the gman shell function
-	// Look for indicators that suggest we're in a shell wrapper
-	// Note: This is a heuristic and not foolproof - we primarily rely on method 1
-	if parent := os.Getenv("_"); parent != "" && strings.Contains(parent, "gman") {
-		// Only trust this if we also have other shell integration indicators
-		// This prevents false positives when gman is called directly
-		if os.Getenv("GMAN_WRAPPER_ACTIVE") == "1" {
-			return true
-		}
-	}
-	
-	// Method 3: Check the process hierarchy (simplified check)
-	// If SHLVL exists and is reasonable, we might be in a shell environment
-	if shlvl := os.Getenv("SHLVL"); shlvl != "" {
-		// Shell level exists, check if we're in an interactive environment
-		if os.Getenv("PS1") != "" || os.Getenv("ZSH_NAME") != "" || os.Getenv("BASH") != "" {
-			// We're in an interactive shell - the user should set up the wrapper
-			// For now, assume it's NOT set up since this is the main issue
-			return false
-		}
-	}
-	
-	// Method 4: Check for explicit bypass flag for advanced users
+	// Advanced users can bypass shell check entirely
 	if os.Getenv("GMAN_SKIP_SHELL_CHECK") == "1" {
 		return true
 	}
 	
-	// Default: assume shell integration is not active
-	// This will prompt users to set up the wrapper function
+	// If neither primary indicator is set, shell integration is not active
 	return false
+}
+
+// getShellIntegrationDiagnostics provides detailed diagnostic information
+func getShellIntegrationDiagnostics() string {
+	var diagnostics []string
+	
+	// Check environment variables
+	if os.Getenv("GMAN_SHELL_INTEGRATION") != "1" {
+		diagnostics = append(diagnostics, "❌ GMAN_SHELL_INTEGRATION not set to '1'")
+	} else {
+		diagnostics = append(diagnostics, "✅ GMAN_SHELL_INTEGRATION properly set")
+	}
+	
+	// Check shell type
+	if shellName := os.Getenv("SHELL"); shellName != "" {
+		diagnostics = append(diagnostics, fmt.Sprintf("📝 Shell: %s", shellName))
+		
+		// Suggest appropriate config file
+		configFile := "~/.bashrc"
+		if strings.Contains(shellName, "zsh") {
+			configFile = "~/.zshrc"
+		} else if strings.Contains(shellName, "fish") {
+			configFile = "~/.config/fish/config.fish"
+		}
+		diagnostics = append(diagnostics, fmt.Sprintf("💡 Expected config file: %s", configFile))
+	}
+	
+	// Check if we're in an interactive shell
+	isInteractive := os.Getenv("PS1") != "" || os.Getenv("ZSH_NAME") != "" || os.Getenv("BASH") != ""
+	if isInteractive {
+		diagnostics = append(diagnostics, "✅ Interactive shell detected")
+	} else {
+		diagnostics = append(diagnostics, "❓ Non-interactive shell or environment")
+	}
+	
+	// Check for bypass flag
+	if os.Getenv("GMAN_SKIP_SHELL_CHECK") == "1" {
+		diagnostics = append(diagnostics, "⚠️  Shell check bypass is active")
+	}
+	
+	return strings.Join(diagnostics, "\n")
 }
 
 // filterRecentTargets returns only recently accessed repositories up to the specified limit
