@@ -6,9 +6,10 @@ import (
 	"os/exec"
 	"strings"
 
-	"gman/internal/di"
+	cmdutils "gman/internal/cmd"
 	"gman/internal/external"
 	"gman/internal/fzf"
+	"gman/internal/repository"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -117,9 +118,9 @@ func init() {
 }
 
 func runFindFile(cmd *cobra.Command, args []string) error {
-	// Configuration is already loaded and repositories checked by tools group's PersistentPreRunE
-	configMgr := di.ConfigManager()
-	cfg := configMgr.GetConfig()
+	// Use consolidated manager access pattern
+	mgrs := cmdutils.GetManagers()
+	cfg := mgrs.Config.GetConfig()
 
 	// Get initial search query
 	var initialQuery string
@@ -188,9 +189,9 @@ func runFindCommit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("fzf is required for this command")
 	}
 
-	// Configuration is already loaded and repositories checked by tools group's PersistentPreRunE
-	configMgr := di.ConfigManager()
-	cfg := configMgr.GetConfig()
+	// Use consolidated manager access pattern
+	mgrs := cmdutils.GetManagers()
+	cfg := mgrs.Config.GetConfig()
 
 	// Get initial search query
 	var initialQuery string
@@ -200,14 +201,11 @@ func runFindCommit(cmd *cobra.Command, args []string) error {
 
 	fmt.Fprintf(os.Stderr, "%s\n", color.BlueString("🔍 Searching commits with real-time git log..."))
 
-	// Filter repositories by group if specified
-	repositories := cfg.Repositories
-	if findGroupFilter != "" {
-		groupRepos, err := configMgr.GetGroupRepositories(findGroupFilter)
-		if err != nil {
-			return fmt.Errorf("failed to get group repositories: %w", err)
-		}
-		repositories = groupRepos
+	// Use consolidated repository filtering
+	filter := repository.NewFilter(mgrs.Config)
+	repositories, err := filter.FilterByGroup(cfg.Repositories, findGroupFilter)
+	if err != nil {
+		return fmt.Errorf("failed to filter repositories: %w", err)
 	}
 
 	// Collect commits from all repositories using git log
@@ -354,9 +352,9 @@ func runFindContent(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("required tools not available")
 	}
 
-	// Configuration is already loaded and repositories checked by tools group's PersistentPreRunE
-	configMgr := di.ConfigManager()
-	cfg := configMgr.GetConfig()
+	// Use consolidated manager access pattern
+	mgrs := cmdutils.GetManagers()
+	cfg := mgrs.Config.GetConfig()
 
 	// Get search pattern (required)
 	searchPattern := args[0]

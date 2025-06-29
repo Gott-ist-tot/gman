@@ -32,6 +32,27 @@ func (f *Filter) FilterByGroup(repositories map[string]string, groupFilter strin
 	}
 
 	if len(groupRepos) == 0 {
+		// Return empty map for backward compatibility with searchers
+		// This matches the original behavior: return []FileResult{}, nil
+		return make(map[string]string), nil
+	}
+
+	return groupRepos, nil
+}
+
+// FilterByGroupStrict returns repositories filtered by group name with strict validation
+// Returns error for empty or non-existent groups
+func (f *Filter) FilterByGroupStrict(repositories map[string]string, groupFilter string) (map[string]string, error) {
+	if groupFilter == "" {
+		return repositories, nil
+	}
+
+	groupRepos, err := f.configMgr.GetGroupRepositories(groupFilter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get group repositories: %w", err)
+	}
+
+	if len(groupRepos) == 0 {
 		return nil, fmt.Errorf("group '%s' is empty or does not exist", groupFilter)
 	}
 
