@@ -1,173 +1,75 @@
 # gman - Git Repository Manager
 
-A powerful CLI tool for managing multiple Git repositories efficiently. Built with Go and designed for developers who work with multiple repositories simultaneously.
+A modern, production-ready CLI tool for efficient multi-repository management. Built with Go and designed for developers who work with multiple Git repositories simultaneously.
 
-## Features
+## ✨ Key Features
 
-### Core Capabilities
-- 🚀 **Fast and Concurrent**: Built with Go, supports parallel operations across repositories
-- 📊 **Visual Status**: Colorized table display showing repository status at a glance
-- 🔄 **Quick Switching**: Instantly switch between repository directories
-- 🔗 **Shell Integration**: Seamless integration with bash/zsh for directory changes
-- ⚡ **Batch Operations**: Sync all repositories with one command
-- 🎯 **Auto-completion**: Tab completion for commands and repository aliases
-- 🛠 **Configurable**: YAML-based configuration with sensible defaults
+- 🚀 **Lightning-Fast Operations**: Concurrent Git operations across multiple repositories
+- 📊 **Real-Time Status Monitoring**: Visual status indicators with live updates
+- 🔄 **Seamless Directory Switching**: Instant navigation between repositories
+- 🔍 **Powerful Search System**: Real-time file and content search across all repositories
+- 📱 **Interactive TUI Dashboard**: Modern terminal interface for visual management
+- 🎯 **Smart Repository Groups**: Organize and operate on related repositories
+- 🔗 **Deep Shell Integration**: Native bash/zsh integration with tab completion
+- ⚡ **Batch Git Operations**: Commit, push, sync across multiple repositories
+- 🛠 **Flexible Configuration**: YAML-based configuration with intelligent defaults
 
-### Enhanced Search System (Phase 2)
-- 🔍 **Lightning-Fast File Search**: Real-time file discovery using `fd` across all repositories
-- 🔎 **Powerful Content Search**: Regex-powered text search using `ripgrep` with instant results
-- 🎛️ **Interactive Selection**: Fuzzy finder (`fzf`) integration for intuitive selection
-- 📱 **TUI Dashboard**: Modern terminal interface with live search and repository management
-- 🏷️ **Group-Based Operations**: Organize repositories into groups for targeted operations
-
-## Installation
-
-### Automated Installation (Recommended)
-
-For the complete setup with external dependencies and shell integration:
+## 🚀 Quick Installation
 
 ```bash
-# Clone and build
+# 1. Clone and build
 git clone <repository-url>
 cd gman
 go build -o gman .
 
-# Run automated installation (includes fd, rg, fzf)
-./scripts/install.sh
+# 2. Run automated setup (includes dependencies + shell integration)
+./scripts/quick-setup.sh
+
+# 3. Start using gman
+gman tools setup  # Interactive setup wizard
 ```
 
-### Quick Manual Installation
+> 📋 **For detailed installation instructions, platform-specific guidance, and troubleshooting, see [Installation Guide](docs/getting-started/INSTALLATION.md)**
+
+### Requirements
+
+- **Go 1.19+** (for building)
+- **Git** (for repository operations)
+- **External Tools** (optional but recommended):
+  - `fd` - Lightning-fast file search
+  - `rg` (ripgrep) - Powerful content search
+  - `fzf` - Interactive fuzzy finder
+
+**⚠️ Important**: Shell integration is required for `gman switch` to work. The automated setup handles this, or see the [Installation Guide](docs/getting-started/INSTALLATION.md) for manual setup.
+
+## ⚡ Quick Start
 
 ```bash
-# Build and install binary only
-go build -o gman .
-sudo mv gman /usr/local/bin/
+# 1. Interactive setup wizard
+gman tools setup
 
-# Setup shell integration
-source scripts/shell-integration.sh
+# 2. Add repositories
+gman repo add /path/to/project my-project
+gman repo add . current-project
+
+# 3. Check status across all repositories
+gman work status --extended
+
+# 4. Create repository groups
+gman repo group create webdev frontend-app backend-api
+
+# 5. Search across repositories
+gman tools find file config.yaml
+gman tools find content "TODO"
+
+# 6. Switch to a repository (changes directory)
+gman switch my-project
+
+# 7. Launch interactive dashboard
+gman tools dashboard
 ```
 
-> 📋 **For detailed installation instructions, troubleshooting, and platform-specific guidance, see [DEPLOYMENT.md](DEPLOYMENT.md)**
-
-### External Dependencies
-
-gman's enhanced search features require external tools:
-
-- **fd**: Lightning-fast file search
-- **ripgrep (rg)**: Powerful content search  
-- **fzf**: Interactive fuzzy finder
-
-Install automatically:
-```bash
-./scripts/setup-dependencies.sh
-```
-
-Or install manually based on your platform - see [DEPLOYMENT.md](DEPLOYMENT.md) for details.
-
-### Shell Integration Setup
-
-**⚠️ Critical**: Shell integration is **required** for `gman switch` to work properly. Without it, `gman switch` will only output the target path but won't actually change your current directory.
-
-**Automatic Setup**: The installation script handles this automatically, or you can source the integration manually:
-
-```bash
-# Add to ~/.bashrc or ~/.zshrc
-source ~/.config/gman/shell-integration.sh
-```
-
-**Manual Setup**: Add this to your `~/.bashrc` or `~/.zshrc`:
-   ```bash
-   # gman Git Repository Manager - Shell Integration
-   # Add gman to PATH (adjust path to your gman binary)
-   export PATH="/usr/local/bin:$PATH"  # if installed via sudo mv
-   # OR for local installation:
-   # export PATH="/path/to/gman/directory:$PATH"
-   
-   # gman wrapper function for directory switching
-   gman() {
-       local output
-       local exit_code
-
-       # Call the actual gman binary and capture both output and exit code
-       output=$(command gman "$@" 2>&1)
-       exit_code=$?
-
-       # Check if this is a directory change request
-       if [[ "$output" == GMAN_CD:* ]]; then
-           local target_dir="${output#GMAN_CD:}"
-           if [ -d "$target_dir" ]; then
-               cd "$target_dir"
-               echo "Switched to: $target_dir"
-           else
-               echo "Error: Directory not found: $target_dir" >&2
-               return 1
-           fi
-       else
-           # For all other commands, just print the output
-           echo "$output"
-       fi
-
-       return $exit_code
-   }
-
-   # Enable gman completion if available
-   if command -v gman &> /dev/null; then
-       eval "$(gman completion bash)"  # for bash
-       eval "$(gman completion zsh)"   # for zsh
-   fi
-   ```
-
-4. **Restart your shell** or run `source ~/.bashrc` (or `~/.zshrc`)
-
-5. **Verify installation**:
-   ```bash
-   # Check if gman is available
-   which gman
-   
-   # Test the shell integration
-   gman list
-   
-   # Test directory switching (should actually change directory)
-   gman switch your-repo-alias
-   pwd  # Should show the repository path
-   ```
-
-## Quick Start
-
-1. **Setup gman with the interactive wizard**:
-   ```bash
-   gman tools setup
-   ```
-
-2. **Add your first repository**:
-   ```bash
-   gman repo add /path/to/your/repo my-project
-   # or add current directory
-   gman repo add . current-project
-   ```
-
-3. **Check status across all repositories**:
-   ```bash
-   gman work status
-   # or extended view with details
-   gman work status --extended
-   ```
-
-4. **Search for files across repositories**:
-   ```bash
-   gman tools find file config.yaml
-   gman tools find content "TODO"
-   ```
-
-5. **Switch to a repository**:
-   ```bash
-   gman switch my-project
-   ```
-
-6. **Launch the interactive dashboard**:
-   ```bash
-   gman tools dashboard
-   ```
+> 🎯 **New to gman?** Start with the [Quick Start Tutorial](docs/getting-started/QUICK_START.md) for a guided walkthrough!
 
 ## Commands
 

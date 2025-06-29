@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"gman/internal/di"
+	"gman/internal/repository"
 )
 
 // ContentResult represents a content search result from rg
@@ -47,18 +48,11 @@ func (rs *RGSearcher) SearchContent(pattern string, repositories map[string]stri
 		return nil, fmt.Errorf("search pattern is required for content search")
 	}
 
-	// Filter repositories by group if specified
-	reposToSearch := repositories
-	if groupFilter != "" {
-		configMgr := di.ConfigManager()
-		groupRepos, err := configMgr.GetGroupRepositories(groupFilter)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get group repositories: %w", err)
-		}
-		if len(groupRepos) == 0 {
-			return []ContentResult{}, nil // Empty group, return empty results
-		}
-		reposToSearch = groupRepos
+	// Use consolidated repository filtering
+	filter := repository.NewFilter(di.ConfigManager())
+	reposToSearch, err := filter.FilterByGroup(repositories, groupFilter)
+	if err != nil {
+		return nil, err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), rs.timeout)

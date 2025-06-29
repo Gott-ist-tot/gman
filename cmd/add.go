@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"gman/internal/di"
+	cmdutils "gman/internal/cmd"
 	"gman/internal/display"
 	"gman/internal/errors"
 
@@ -65,8 +65,9 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Configuration is already loaded by root command's PersistentPreRunE
-	configMgr := di.ConfigManager()
+	// Use consolidated manager access pattern
+	mgrs := cmdutils.GetManagers()
+	configMgr := mgrs.Config
 
 	// Check if alias already exists
 	cfg := configMgr.GetConfig()
