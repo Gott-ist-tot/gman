@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"gman/internal/di"
+	cmdutils "gman/internal/cmd"
 	"gman/test"
 )
 
@@ -134,7 +134,8 @@ func TestSwitchWithWorktrees(t *testing.T) {
 		{filepath.Join(tempDir, "hotfix-wt"), "hotfix-branch"},
 	}
 
-	gitManager := di.GitManager()
+	mgrs := cmdutils.GetManagers()
+	gitManager := mgrs.Git
 	for _, wt := range worktrees {
 		if err := gitManager.AddWorktree(repoPath, wt.path, wt.branch); err != nil {
 			t.Fatalf("Failed to create worktree %s: %v", wt.path, err)
@@ -249,7 +250,8 @@ func TestSwitchTargetCollection(t *testing.T) {
 	}
 
 	// Create worktrees
-	gitManager := di.GitManager()
+	mgrs := cmdutils.GetManagers()
+	gitManager := mgrs.Git
 	worktreeInfo := []struct {
 		repoPath string
 		wtPath   string

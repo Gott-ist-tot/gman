@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	cmdutils "gman/internal/cmd"
 	"gman/internal/di"
 )
 
@@ -30,7 +31,8 @@ func BenchmarkStatusChecking(b *testing.B) {
 		}
 	}
 
-	gitMgr := di.GitManager()
+	mgrs := cmdutils.GetManagers()
+	gitMgr := mgrs.Git
 	
 	// Reset timer before benchmark
 	b.ResetTimer()
@@ -74,8 +76,8 @@ func BenchmarkConfigLoading(b *testing.B) {
 		di.Reset()
 		
 		os.Setenv("GMAN_CONFIG", configPath)
-		configMgr := di.ConfigManager()
-		err := configMgr.Load()
+		mgrs := cmdutils.GetManagers()
+		err := mgrs.Config.Load()
 		os.Unsetenv("GMAN_CONFIG")
 		
 		if err != nil {
@@ -105,7 +107,8 @@ func BenchmarkConcurrentOperations(b *testing.B) {
 		}
 	}
 
-	gitMgr := di.GitManager()
+	mgrs := cmdutils.GetManagers()
+	gitMgr := mgrs.Git
 	
 	b.ResetTimer()
 

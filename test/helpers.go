@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"gman/internal/config"
-	"gman/internal/di"
+	cmdutils "gman/internal/cmd"
 	"gman/pkg/types"
 	"gopkg.in/yaml.v3"
 )
@@ -171,8 +171,8 @@ func CreateTestConfig(t *testing.T, configPath string, repos map[string]string, 
 		groupsMap[group.Name] = group
 	}
 
-	configMgr := di.ConfigManager()
-	cfg := configMgr.GetConfig()
+	mgrs := cmdutils.GetManagers()
+	cfg := mgrs.Config.GetConfig()
 	cfg.Repositories = repos
 	cfg.Groups = groupsMap
 
@@ -196,7 +196,7 @@ func CreateTestConfig(t *testing.T, configPath string, repos map[string]string, 
 		Path:         configPath,
 		Repositories: repos,
 		Groups:       groups,
-		Manager:      configMgr,
+		Manager:      mgrs.Config,
 	}, nil
 }
 
@@ -214,11 +214,11 @@ func WithTestConfig(t *testing.T, configPath string, testFunc func(*TestConfig))
 		}
 	}()
 
-	configMgr := di.ConfigManager()
-	if err := configMgr.Load(); err != nil {
+	mgrs := cmdutils.GetManagers()
+	if err := mgrs.Config.Load(); err != nil {
 		t.Fatalf("Failed to load test config: %v", err)
 	}
-	cfg := configMgr.GetConfig()
+	cfg := mgrs.Config.GetConfig()
 
 	// Convert groups map to slice for TestConfig
 	var groups []types.Group
@@ -230,7 +230,7 @@ func WithTestConfig(t *testing.T, configPath string, testFunc func(*TestConfig))
 		Path:         configPath,
 		Repositories: cfg.Repositories,
 		Groups:       groups,
-		Manager:      configMgr,
+		Manager:      mgrs.Config,
 	}
 
 	testFunc(testConfig)

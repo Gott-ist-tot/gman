@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	cmdutils "gman/internal/cmd"
 	"gman/internal/di"
 )
 
@@ -57,9 +58,9 @@ repositories:
 	os.Setenv("GMAN_SKIP_REPO_CHECK", "true")
 	defer os.Unsetenv("GMAN_SKIP_REPO_CHECK")
 
-	// Manually load the configuration for testing
-	configMgr := di.ConfigManager()
-	if err := configMgr.Load(); err != nil {
+	// Use consolidated manager access pattern
+	mgrs := cmdutils.GetManagers()
+	if err := mgrs.Config.Load(); err != nil {
 		t.Fatalf("Failed to load test config: %v", err)
 	}
 
@@ -161,9 +162,9 @@ func TestStatusCommandWithNoRepositories(t *testing.T) {
 	os.Setenv("GMAN_SKIP_REPO_CHECK", "true")
 	defer os.Unsetenv("GMAN_SKIP_REPO_CHECK")
 
-	// Manually load the configuration for testing
-	configMgr := di.ConfigManager()
-	if err := configMgr.Load(); err != nil {
+	// Use consolidated manager access pattern
+	mgrs := cmdutils.GetManagers()
+	if err := mgrs.Config.Load(); err != nil {
 		t.Fatalf("Failed to load test config: %v", err)
 	}
 

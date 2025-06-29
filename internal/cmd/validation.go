@@ -7,7 +7,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"gman/internal/config"
-	"gman/internal/di"
 )
 
 // ValidationConfig holds configuration for command validation
@@ -45,7 +44,8 @@ func CreatePersistentPreRunE(config *ValidationConfig) func(*cobra.Command, []st
 		}
 
 		// Get configuration manager
-		configMgr := di.ConfigManager()
+		mgrs := GetManagers()
+		configMgr := mgrs.Config
 
 		// Validate repositories if required
 		if config.RequireRepositories {
@@ -126,8 +126,9 @@ type ValidateCommandContext struct {
 
 // NewValidateCommandContext creates a new validation context
 func NewValidateCommandContext(cmd *cobra.Command, args []string) *ValidateCommandContext {
+	mgrs := GetManagers()
 	return &ValidateCommandContext{
-		ConfigMgr: di.ConfigManager(),
+		ConfigMgr: mgrs.Config,
 		Command:   cmd,
 		Args:      args,
 	}

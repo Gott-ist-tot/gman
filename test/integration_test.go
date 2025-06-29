@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"gman/internal/di"
+	cmdutils "gman/internal/cmd"
 	"gman/internal/interactive"
 	"gman/pkg/types"
 	"gopkg.in/yaml.v3"
@@ -39,8 +39,8 @@ func TestFullWorkflow(t *testing.T) {
 
 	// Create and setup configuration
 	configPath := filepath.Join(tempDir, "config.yml")
-	configMgr := di.ConfigManager()
-	cfg := configMgr.GetConfig()
+	mgrs := cmdutils.GetManagers()
+	cfg := mgrs.Config.GetConfig()
 	cfg.Repositories = repos
 
 	// Add some groups for testing
@@ -75,7 +75,8 @@ func TestFullWorkflow(t *testing.T) {
 
 	// Test workflow steps
 	t.Run("1. Configuration Loading", func(t *testing.T) {
-		reloadedMgr := di.ConfigManager()
+		mgrs := cmdutils.GetManagers()
+		reloadedMgr := mgrs.Config
 		os.Setenv("GMAN_CONFIG", configPath)
 		reloadedMgr.Load()
 		reloadedCfg := reloadedMgr.GetConfig()
@@ -90,7 +91,8 @@ func TestFullWorkflow(t *testing.T) {
 	})
 
 	t.Run("2. Git Operations", func(t *testing.T) {
-		gitMgr := di.GitManager()
+		mgrs := cmdutils.GetManagers()
+		gitMgr := mgrs.Git
 
 		// Test status checking
 		for alias, path := range repos {
@@ -107,7 +109,8 @@ func TestFullWorkflow(t *testing.T) {
 	})
 
 	t.Run("3. Worktree Operations", func(t *testing.T) {
-		gitMgr := di.GitManager()
+		mgrs := cmdutils.GetManagers()
+		gitMgr := mgrs.Git
 		backendPath := repos["project-backend"]
 
 		// Create worktrees
@@ -145,7 +148,8 @@ func TestFullWorkflow(t *testing.T) {
 	})
 
 	t.Run("4. Diff Operations", func(t *testing.T) {
-		gitMgr := di.GitManager()
+		mgrs := cmdutils.GetManagers()
+		gitMgr := mgrs.Git
 		backendPath := repos["project-backend"]
 
 		// Create a feature branch with changes
@@ -181,8 +185,8 @@ func TestFullWorkflow(t *testing.T) {
 		// Test switch target collection
 		os.Setenv("GMAN_CONFIG", configPath)
 		defer os.Unsetenv("GMAN_CONFIG")
-		configMgr := di.ConfigManager()
-		err := configMgr.Load()
+		mgrs := cmdutils.GetManagers()
+		err := mgrs.Config.Load()
 		if err != nil {
 			t.Fatalf("Failed to load config: %v", err)
 		}
@@ -214,14 +218,14 @@ func TestFullWorkflow(t *testing.T) {
 		// Test that git manager and config manager work together
 		os.Setenv("GMAN_CONFIG", configPath)
 		defer os.Unsetenv("GMAN_CONFIG")
-		configMgr := di.ConfigManager()
-		err := configMgr.Load()
+		mgrs := cmdutils.GetManagers()
+		err := mgrs.Config.Load()
 		if err != nil {
 			t.Fatalf("Failed to load config: %v", err)
 		}
-		cfg := configMgr.GetConfig()
+		cfg := mgrs.Config.GetConfig()
 
-		gitMgr := di.GitManager()
+		gitMgr := mgrs.Git
 
 		// Test operations across all configured repositories
 		statusResults := make(map[string]*types.RepoStatus)
@@ -273,8 +277,8 @@ func TestConcurrentOperations(t *testing.T) {
 	}
 
 	configPath := filepath.Join(tempDir, "config.yml")
-	configMgr := di.ConfigManager()
-	cfg := configMgr.GetConfig()
+	mgrs := cmdutils.GetManagers()
+	cfg := mgrs.Config.GetConfig()
 	cfg.Repositories = repos
 
 	// Save config manually to the specified path  
@@ -288,7 +292,8 @@ func TestConcurrentOperations(t *testing.T) {
 	}
 
 	t.Run("concurrent status checks", func(t *testing.T) {
-		gitMgr := di.GitManager()
+		mgrs := cmdutils.GetManagers()
+		gitMgr := mgrs.Git
 
 		// Test concurrent status checking
 		statusChan := make(chan error, len(repos))
@@ -314,7 +319,8 @@ func TestConcurrentOperations(t *testing.T) {
 	})
 
 	t.Run("concurrent worktree operations", func(t *testing.T) {
-		gitMgr := di.GitManager()
+		mgrs := cmdutils.GetManagers()
+		gitMgr := mgrs.Git
 
 		// Test concurrent worktree creation (limited to first 3 repos to avoid conflicts)
 		testRepos := 3
@@ -357,7 +363,8 @@ func TestErrorRecovery(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	gitMgr := di.GitManager()
+	mgrs := cmdutils.GetManagers()
+	gitMgr := mgrs.Git
 
 	t.Run("non-existent repository", func(t *testing.T) {
 		nonExistentPath := filepath.Join(tempDir, "nonexistent")
@@ -394,8 +401,8 @@ func TestErrorRecovery(t *testing.T) {
 
 		os.Setenv("GMAN_CONFIG", invalidConfigPath)
 		defer os.Unsetenv("GMAN_CONFIG")
-		configMgr := di.ConfigManager()
-		err := configMgr.Load()
+		mgrs := cmdutils.GetManagers()
+		err := mgrs.Config.Load()
 		if err == nil {
 			t.Error("Expected error for invalid configuration")
 		}
@@ -441,7 +448,8 @@ func TestPerformanceCharacteristics(t *testing.T) {
 				}
 			}
 
-			gitMgr := di.GitManager()
+			mgrs := cmdutils.GetManagers()
+		gitMgr := mgrs.Git
 
 			// Measure status checking performance
 			start := time.Now()

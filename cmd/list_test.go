@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	cmdutils "gman/internal/cmd"
 	"gman/internal/di"
 )
 
@@ -44,8 +45,8 @@ repositories:
 	defer os.Unsetenv("GMAN_SKIP_REPO_CHECK")
 
 	// Manually load the configuration for testing
-	configMgr := di.ConfigManager()
-	if err := configMgr.Load(); err != nil {
+	mgrs := cmdutils.GetManagers()
+	if err := mgrs.Config.Load(); err != nil {
 		t.Fatalf("Failed to load test config: %v", err)
 	}
 
